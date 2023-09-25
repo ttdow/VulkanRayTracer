@@ -1,8 +1,9 @@
 #version 460
 #extension GL_EXT_ray_tracing : require
 #extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_GOOGLE_include_directive : enable
 
-#define M_PI 3.1415926535897932384626433832795
+#include "raycommon.glsl"
 
 struct Material 
 {
@@ -14,18 +15,7 @@ struct Material
 
 hitAttributeEXT vec2 hitCoordinate;
 
-layout(location = 0) rayPayloadInEXT Payload 
-{
-  vec3 rayOrigin;
-  vec3 rayDirection;
-  vec3 previousNormal;
-
-  vec3 directColor;
-  vec3 indirectColor;
-  int rayDepth;
-
-  int rayActive;
-} payload;
+layout(location = 0) rayPayloadInEXT Payload payload;
 
 layout(location = 1) rayPayloadEXT bool isShadow;
 
@@ -40,20 +30,25 @@ layout(binding = 1, set = 0) uniform Camera
     uint frameCount;
 } camera;
 
-layout(binding = 2, set = 0) buffer IndexBuffer { uint data[]; }
-indexBuffer;
-layout(binding = 3, set = 0) buffer VertexBuffer { float data[]; }
-vertexBuffer;
+layout(binding = 2, set = 0) buffer IndexBuffer 
+{ 
+    uint data[];
+} indexBuffer;
 
-layout(binding = 0, set = 1) buffer MaterialIndexBuffer { uint data[]; }
-materialIndexBuffer;
-layout(binding = 1, set = 1) buffer MaterialBuffer { Material data[]; }
-materialBuffer;
+layout(binding = 3, set = 0) buffer VertexBuffer 
+{ 
+    float data[];
+} vertexBuffer;
 
-float random(vec2 uv, float seed) 
-{
-    return fract(sin(mod(dot(uv, vec2(12.9898, 78.233)) + 1113.1 * seed, M_PI)) * 43758.5453);
-}
+layout(binding = 0, set = 1) buffer MaterialIndexBuffer 
+{ 
+    uint data[];
+} materialIndexBuffer;
+
+layout(binding = 1, set = 1) buffer MaterialBuffer 
+{ 
+    Material data[];
+} materialBuffer;
 
 vec3 uniformSampleHemisphere(vec2 uv) 
 {
@@ -79,9 +74,11 @@ void main()
         return;
     }
 
+    // Get the indices of all primitives (triangles) involved in the hit face.
+    // gl_PrimitiveID contains the index of the current primitive.
     ivec3 indices = ivec3(indexBuffer.data[3 * gl_PrimitiveID + 0],
-                        indexBuffer.data[3 * gl_PrimitiveID + 1],
-                        indexBuffer.data[3 * gl_PrimitiveID + 2]);
+                          indexBuffer.data[3 * gl_PrimitiveID + 1],
+                          indexBuffer.data[3 * gl_PrimitiveID + 2]);
 
     vec3 barycentric = vec3(1.0 - hitCoordinate.x - hitCoordinate.y,
                             hitCoordinate.x, hitCoordinate.y);

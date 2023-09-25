@@ -1,23 +1,16 @@
 #version 460
 #extension GL_EXT_ray_tracing : require
+#extension GL_GOOGLE_include_directive : enable
 
-#define M_PI 3.1415926535897932384626433832795
+#include "raycommon.glsl"
 
-layout(location = 0) rayPayloadEXT Payload 
-{
-  vec3 rayOrigin;
-  vec3 rayDirection;
-  vec3 previousNormal;
+// When tracing a ray, the hit or miss shaders need to be able to return some information to the shader
+// program that invoked the ray tracing. This is done through the use of a payload (rayPayloadEXT).
+layout(location = 0) rayPayloadEXT Payload payload;
 
-  vec3 directColor;
-  vec3 indirectColor;
-  int rayDepth;
-
-  int rayActive;
-} payload;
-
+// Input uniforms.
 layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
-layout(binding = 1, set = 0) uniform Camera 
+layout(binding = 1, set = 0) uniform Camera
 {
   vec4 position;
   vec4 right;
@@ -27,18 +20,18 @@ layout(binding = 1, set = 0) uniform Camera
   uint frameCount;
 } camera;
 
+// Output image.
 layout(binding = 4, set = 0, rgba32f) uniform image2D image;
-
-float random(vec2 uv, float seed) 
-{
-  return fract(sin(mod(dot(uv, vec2(12.9898, 78.233)) + 1113.1 * seed, M_PI)) * 43758.5453);
-}
 
 void main() 
 {
-    vec2 uv = gl_LaunchIDEXT.xy + vec2(random(gl_LaunchIDEXT.xy, 0), random(gl_LaunchIDEXT.xy, 1));
-    uv /= vec2(gl_LaunchSizeEXT.xy);
-    uv = (uv * 2.0f - 1.0f) * vec2(1.0f, -1.0f);
+    // Start by computing the floating-point pixel coordinates of the current pixel being rendered.
+    // gl_LaunchIDEXT contains the integer coords of the current pixel.
+    // gl_LaunchSizeEXT contains the integer size of the image being rendered.
+    
+    vec2 uv = gl_LaunchIDEXT.xy + vec2(0.5); //vec2(random(gl_LaunchIDEXT.xy, 0), random(gl_LaunchIDEXT.xy, 1));
+    uv = uv / vec2(gl_LaunchSizeEXT.xy);
+    uv = (uv * 2.0f - 1.0f) * vec2(1.0f, -1.0f); // Need to flip along Y-axis or image will be upside down
 
     payload.rayOrigin = camera.position.xyz;
     payload.rayDirection = normalize(uv.x * camera.right + uv.y * camera.up + camera.forward).xyz;
@@ -50,13 +43,34 @@ void main()
 
     payload.rayActive = 1;
 
-    for (int x = 0; x < 16; x++)
+    // All geometry is opaque (i.e. no transparency)
+    uint rayFlags = gl_RayFlagsOpaqueEXT;
+
+    // Min and max of potential ray intersections.
+    float tMin = 0.001;
+    float tMax = 10000.0;
+
+    // Perfrom multiple recursive ray traces.
+    uint recursionDepth = 16;
+    for (int x = 0; x < recursionDepth; x++)
     {
-        traceRayEXT(topLevelAS, gl_RayFlagsOpaqueEXT, 0xFF, 0, 0, 0, payload.rayOrigin, 0.001, payload.rayDirection, 10000.0, 0);
+        traceRayEXT(topLevelAS,             // Acceleration structure.
+                    rayFlags,               // Flags.
+                    0xFF,                   // Cull mask.
+                    0,                      // Shader Binding Table hit group for offset.
+                    0,                      // Shader Binding Table hit group for stride.
+                    0,                      // Shader Binding Table miss shader index.
+                    payload.rayOrigin,      // Ray origin.
+                    tMin,                   // Ray min range.
+                    payload.rayDirection,   // Ray direction.
+                    tMax,                   // Ray max range.
+                    0);                     // Payload (location = 0)
     }
 
+    // Determine the final pixel color using the payload data.
     vec4 color = vec4(payload.directColor + payload.indirectColor, 1.0);
 
+    // Temporal sampling of pixel color data.
     if (camera.frameCount > 0)
     {
         vec4 previousColor = imageLoad(image, ivec2(gl_LaunchIDEXT.xy));
@@ -66,5 +80,8 @@ void main()
         color /= (camera.frameCount + 1);
     }
 
-    imageStore(image, ivec2(gl_LaunchIDEXT.xy), color);
+    // Finally, write the resulting payload into the output image for rendering.
+    imageStore(image,                       // Handle to final image output.
+               ivec2(gl_LaunchIDEXT.xy),    // Integer pixel location in final image.
+               color);                      // Pixel color.
 }

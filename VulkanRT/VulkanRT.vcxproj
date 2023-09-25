@@ -155,6 +155,7 @@
     <ClInclude Include="tiny_obj_loader.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="res\shaders\raycommon.glsl" />
     <None Include="res\shaders\raytrace.rchit" />
     <None Include="res\shaders\raytrace.rgen" />
     <None Include="res\shaders\raytrace.rmiss" />

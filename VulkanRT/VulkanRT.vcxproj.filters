@@ -33,5 +33,6 @@
     <None Include="res\shaders\raytrace.rgen" />
     <None Include="res\shaders\raytrace.rmiss" />
     <None Include="res\shaders\raytrace_shadow.rmiss" />
+    <None Include="res\shaders\raycommon.glsl" />
   </ItemGroup>
 </Project>

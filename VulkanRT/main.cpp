@@ -1806,7 +1806,7 @@ int main()
 	// Uniform buffer
 	struct UniformStructure
 	{
-		float cameraPosition[4] = { 0, 10, 0, 1 };
+		float cameraPosition[4] = { 0, 0, 0, 1 };
 		float cameraRight[4] = { 1, 0, 0, 1 };
 		float cameraUp[4] = { 0, 1, 0, 1 };
 		float cameraForward[4] = { 0, 0, 1, 1 };
@@ -2618,6 +2618,10 @@ int main()
 
 	// Main loop
 	uint32_t currentFrame = 0;
+
+	cameraPosition[0] = 0.0f;
+	cameraPosition[1] = 3.0f;
+	cameraPosition[2] = 7.0f;
 
 	while (!glfwWindowShouldClose(pWindow))
 	{

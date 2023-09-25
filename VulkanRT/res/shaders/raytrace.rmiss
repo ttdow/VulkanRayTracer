@@ -1,17 +1,13 @@
 #version 460
 #extension GL_EXT_ray_tracing : require
+#extension GL_GOOGLE_include_directive : enable
 
-layout(location = 0) rayPayloadInEXT Payload {
-  vec3 rayOrigin;
-  vec3 rayDirection;
-  vec3 previousNormal;
+#include "raycommon.glsl"
 
-  vec3 directColor;
-  vec3 indirectColor;
-  int rayDepth;
+layout(location = 0) rayPayloadInEXT Payload payload;
 
-  int rayActive;
+void main() 
+{ 
+	// Current ray missed all scene geometry, therefore stop tracing.
+	payload.rayActive = 0;
 }
-payload;
-
-void main() { payload.rayActive = 0; }
