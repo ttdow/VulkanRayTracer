@@ -67,6 +67,8 @@ vec3 alignHemisphereWithCoordinateSystem(vec3 hemisphere, vec3 up)
     return hemisphere.x * right + hemisphere.y * up + hemisphere.z * forward;
 }
 
+layout(binding = 5) uniform sampler2D texSampler;
+
 void main() 
 {
     if (payload.rayActive == 0) 
@@ -79,40 +81,58 @@ void main()
     ivec3 indices = ivec3(indexBuffer.data[3 * gl_PrimitiveID + 0],
                           indexBuffer.data[3 * gl_PrimitiveID + 1],
                           indexBuffer.data[3 * gl_PrimitiveID + 2]);
+    
+    // Save the barycentric coords of the hit location.
+    vec3 barycentric = vec3(1.0 - hitCoordinate.x - hitCoordinate.y, hitCoordinate.x, hitCoordinate.y);
 
-    vec3 barycentric = vec3(1.0 - hitCoordinate.x - hitCoordinate.y,
-                            hitCoordinate.x, hitCoordinate.y);
+    // Determine the position of this triangle's vertices in local space.
+    vec3 vertexA = vec3(vertexBuffer.data[8 * indices.x + 0],
+                        vertexBuffer.data[8 * indices.x + 1],
+                        vertexBuffer.data[8 * indices.x + 2]);
 
-    vec3 vertexA = vec3(vertexBuffer.data[3 * indices.x + 0],
-                        vertexBuffer.data[3 * indices.x + 1],
-                        vertexBuffer.data[3 * indices.x + 2]);
-    vec3 vertexB = vec3(vertexBuffer.data[3 * indices.y + 0],
-                        vertexBuffer.data[3 * indices.y + 1],
-                        vertexBuffer.data[3 * indices.y + 2]);
-    vec3 vertexC = vec3(vertexBuffer.data[3 * indices.z + 0],
-                        vertexBuffer.data[3 * indices.z + 1],
-                        vertexBuffer.data[3 * indices.z + 2]);
+    vec3 vertexB = vec3(vertexBuffer.data[8 * indices.y + 0],
+                        vertexBuffer.data[8 * indices.y + 1],
+                        vertexBuffer.data[8 * indices.y + 2]);
 
+    vec3 vertexC = vec3(vertexBuffer.data[8 * indices.z + 0],
+                        vertexBuffer.data[8 * indices.z + 1],
+                        vertexBuffer.data[8 * indices.z + 2]);
+    
+    // Calculate the hit position in local space.
     vec3 position = vertexA * barycentric.x + vertexB * barycentric.y + vertexC * barycentric.z;
+
+    // Calculate the normal of this triangle.
     vec3 geometricNormal = normalize(cross(vertexB - vertexA, vertexC - vertexA));
 
-    vec3 surfaceColor = materialBuffer.data[materialIndexBuffer.data[gl_PrimitiveID]].diffuse;
+    // Get the UV coordinates of the vertices.
+    vec2 uvA = vec2(vertexBuffer.data[8 * indices.x + 6], vertexBuffer.data[8 * indices.x + 7]);
+    vec2 uvB = vec2(vertexBuffer.data[8 * indices.y + 6], vertexBuffer.data[8 * indices.y + 7]);
+    vec2 uvC = vec2(vertexBuffer.data[8 * indices.z + 6], vertexBuffer.data[8 * indices.z + 7]);
 
-    // 40 & 41 == light
+    // Calculate the UV coordinate of the hit position.
+    vec2 uv = uvA * barycentric.x + uvB * barycentric.y + uvC * barycentric.z;
+
+    // Get the material's diffuse color for this triangle.
+    //vec3 surfaceColor = materialBuffer.data[materialIndexBuffer.data[gl_PrimitiveID]].diffuse;
+    vec3 surfaceColor = vec3(texture(texSampler, uv));
+
+    // 40 & 41 == light - ???
     if (gl_PrimitiveID == 40 || gl_PrimitiveID == 41) 
     {
         if (payload.rayDepth == 0) 
         {
+            // Get the light color being emitted if this is the first ray.
             payload.directColor = materialBuffer.data[materialIndexBuffer.data[gl_PrimitiveID]].emission;
         } 
         else 
         {
+            // Not sure.
             payload.indirectColor += (1.0 / payload.rayDepth) * 
                 materialBuffer.data[materialIndexBuffer.data[gl_PrimitiveID]].emission *
                 dot(payload.previousNormal, payload.rayDirection);
         }
     }
-    else 
+    else // If this is not a light.
     {
         int randomIndex = int(random(gl_LaunchIDEXT.xy, camera.frameCount) * 2 + 40);
         vec3 lightColor = vec3(0.6, 0.6, 0.6);
@@ -121,15 +141,17 @@ void main()
                                     indexBuffer.data[3 * randomIndex + 1],
                                     indexBuffer.data[3 * randomIndex + 2]);
 
-        vec3 lightVertexA = vec3(vertexBuffer.data[3 * lightIndices.x + 0],
-                                    vertexBuffer.data[3 * lightIndices.x + 1],
-                                    vertexBuffer.data[3 * lightIndices.x + 2]);
-        vec3 lightVertexB = vec3(vertexBuffer.data[3 * lightIndices.y + 0],
-                                    vertexBuffer.data[3 * lightIndices.y + 1],
-                                    vertexBuffer.data[3 * lightIndices.y + 2]);
-        vec3 lightVertexC = vec3(vertexBuffer.data[3 * lightIndices.z + 0],
-                                    vertexBuffer.data[3 * lightIndices.z + 1],
-                                    vertexBuffer.data[3 * lightIndices.z + 2]);
+        vec3 lightVertexA = vec3(vertexBuffer.data[8 * lightIndices.x + 0],
+                                    vertexBuffer.data[8 * lightIndices.x + 1],
+                                    vertexBuffer.data[8 * lightIndices.x + 2]);
+
+        vec3 lightVertexB = vec3(vertexBuffer.data[8 * lightIndices.y + 0],
+                                    vertexBuffer.data[8 * lightIndices.y + 1],
+                                    vertexBuffer.data[8 * lightIndices.y + 2]);
+
+        vec3 lightVertexC = vec3(vertexBuffer.data[8 * lightIndices.z + 0],
+                                    vertexBuffer.data[8 * lightIndices.z + 1],
+                                    vertexBuffer.data[8 * lightIndices.z + 2]);
 
         vec2 uv = vec2(random(gl_LaunchIDEXT.xy, camera.frameCount), random(gl_LaunchIDEXT.xy, camera.frameCount + 1));
         
@@ -167,7 +189,7 @@ void main()
             else
             {
                 payload.indirectColor += (1.0 / payload.rayDepth) * surfaceColor * lightColor * dot(payload.previousNormal, payload.rayDirection) * dot(geometricNormal, positionToLightDirection);
-                //payload.indirectColor = vec3(0.0, 1.0, 0.0);
+                //payload.indirectColor += (1.0 / payload.rayDepth) * vec3(0.0, 1.0, 0.0);
             
             }
         } 

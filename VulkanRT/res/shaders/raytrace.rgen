@@ -33,8 +33,8 @@ void main()
     
     vec2 uv = gl_LaunchIDEXT.xy + vec2(0.5); //vec2(random(gl_LaunchIDEXT.xy, 0), random(gl_LaunchIDEXT.xy, 1));
     uv = uv / vec2(gl_LaunchSizeEXT.xy);
-    //uv = (uv * 2.0f - 1.0f) * vec2(1.0f, -1.0f); // Need to flip along Y-axis or image will be upside down
-    uv = (uv * 2.0f - 1.0f);
+    uv = (uv * 2.0f - 1.0f) * vec2(1.0f, -1.0f); // Need to flip along Y-axis or image will be upside down
+    //uv = (uv * 2.0f - 1.0f);
 
     vec4 textureColor = texture(texSampler, uv);
 
@@ -86,9 +86,9 @@ void main()
     }
 
     // Finally, write the resulting payload into the output image for rendering.
-    //imageStore(image,                       // Handle to final image output.
-    //           ivec2(gl_LaunchIDEXT.xy),    // Integer pixel location in final image.
-    //           color);                      // Pixel color.
+    imageStore(image,                       // Handle to final image output.
+               ivec2(gl_LaunchIDEXT.xy),    // Integer pixel location in final image.
+               color);                      // Pixel color.
 
-    imageStore(image, ivec2(gl_LaunchIDEXT.xy), textureColor);
+    //imageStore(image, ivec2(gl_LaunchIDEXT.xy), textureColor);
 }

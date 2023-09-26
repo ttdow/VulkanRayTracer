@@ -1,12 +1,23 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
 
+#define TINYGLTF_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#define TINYGLTF_NOEXCEPTION
+#define JSON_NOEXCEPTION
+#include "tiny_gltf.h"
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
+
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/hash.hpp>
 
 #include <fstream>
 #include <iostream>
@@ -14,6 +25,8 @@
 #include <string>
 #include <stdexcept>
 #include <cstdlib>
+#include <array>
+#include <unordered_map>
 
 #define STRING_RESET "\033[0m"
 #define STRING_INFO "\033[37m"
@@ -28,6 +41,69 @@ static char keyDownIndex[500];
 static float cameraPosition[3];
 static float cameraYaw;
 static float cameraPitch;
+
+struct Vertex
+{
+	glm::vec3 pos;
+	glm::vec3 color;
+	glm::vec2 texCoord;
+
+	static VkVertexInputBindingDescription GetBindingDescription()
+	{
+		VkVertexInputBindingDescription bindingDescription{};
+		bindingDescription.binding = 0;
+		bindingDescription.stride = sizeof(Vertex);
+		bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+		return bindingDescription;
+	}
+
+	static std::array<VkVertexInputAttributeDescription, 3> GetAttributeDescriptions()
+	{
+		std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
+
+		attributeDescriptions[0].binding = 0;
+		attributeDescriptions[0].location = 0;
+		attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+		attributeDescriptions[0].offset = offsetof(Vertex, pos);
+
+		attributeDescriptions[0].binding = 0;
+		attributeDescriptions[0].location = 1;
+		attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+		attributeDescriptions[0].offset = offsetof(Vertex, color);
+
+		attributeDescriptions[0].binding = 0;
+		attributeDescriptions[0].location = 2;
+		attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+		attributeDescriptions[0].offset = offsetof(Vertex, texCoord);
+
+		return attributeDescriptions;
+	}
+
+	bool operator==(const Vertex& other) const
+	{
+		return (pos == other.pos && color == other.color && texCoord == other.texCoord);
+	}
+};
+
+namespace std
+{
+	template<> struct hash<Vertex>
+	{
+		size_t operator()(Vertex const& vertex) const
+		{
+			return ((hash<glm::vec3>()(vertex.pos) ^ (hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^ (hash<glm::vec2>()(vertex.texCoord) << 1);
+		}
+	};
+}
+
+struct ImageStruct
+{
+	VkImage image = NULL;
+	VkDeviceMemory imageMemory = NULL;
+	VkImageView imageView = NULL;
+	VkSampler imageSampler = NULL;
+};
 
 void KeyCallback(GLFWwindow* pWindow, int key, int scancode, int action, int mods)
 {
@@ -287,14 +363,6 @@ void CreateImage(VkPhysicalDevice& physicalDevice, VkDevice& device, uint32_t wi
 	}
 }
 
-struct ImageStruct
-{
-	VkImage image = NULL;
-	VkDeviceMemory imageMemory = NULL;
-	VkImageView imageView = NULL;
-	VkSampler imageSampler = NULL;
-};
-
 void CreateTextureImage(VkPhysicalDevice& physicalDevice, VkDevice& device, VkQueue& graphicsQueue, 
 	VkCommandPool& commandPool, ImageStruct& image)
 {
@@ -397,6 +465,70 @@ void CreateTextureSampler(VkPhysicalDevice& physicalDevice, VkDevice& device, Im
 	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 
 	VkResult result = vkCreateSampler(device, &samplerInfo, nullptr, &image.imageSampler);
+}
+
+void LoadModel(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, std::vector<tinyobj::material_t>& materials, 
+	std::vector<tinyobj::shape_t>& shapes, uint32_t& primitiveCount)
+{
+	tinyobj::ObjReaderConfig objReaderConfig;
+	tinyobj::ObjReader objReader;
+
+	if (!objReader.ParseFromFile("res/cube_scene.obj", objReaderConfig))
+	{
+		if (!objReader.Error().empty())
+		{
+			throw std::runtime_error("Failed to find the OBJ file!");
+		}
+
+		exit(1);
+	}
+
+	if (!objReader.Warning().empty())
+	{
+		std::cout << "TinyObjReader: " << objReader.Warning();
+	}
+
+	const tinyobj::attrib_t& attrib = objReader.GetAttrib();
+	shapes = objReader.GetShapes();
+	materials = objReader.GetMaterials();
+
+	std::unordered_map<Vertex, uint32_t> uniqueVertices{};
+
+	for (const auto& shape : shapes)
+	{
+		primitiveCount += shape.mesh.num_face_vertices.size();
+
+		for (const auto& index : shape.mesh.indices)
+		{
+			Vertex vertex{};
+
+			vertex.pos[0] = attrib.vertices[3 * index.vertex_index + 0];
+			vertex.pos[1] = attrib.vertices[3 * index.vertex_index + 1];
+			vertex.pos[2] = attrib.vertices[3 * index.vertex_index + 2];
+
+			vertex.texCoord[0] = attrib.texcoords[2 * index.texcoord_index + 0];
+			vertex.texCoord[1] = 1.0f - attrib.texcoords[2 * index.texcoord_index + 1];
+
+			vertex.color[0] = 1.0f;
+			vertex.color[1] = 1.0f;
+			vertex.color[2] = 1.0f;
+
+			if (uniqueVertices.count(vertex) == 0)
+			{
+				uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
+				vertices.push_back(vertex);
+			}
+
+			indices.push_back(uniqueVertices[vertex]);
+		}
+	}
+}
+
+void CreateVertexBuffer()
+{
+	VkBufferCreateInfo bufferInfo{};
+	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	//bufferInfo.size = sizeof(vertices)
 }
 
 class App
@@ -541,8 +673,6 @@ int main()
 	return 1;
 	*/
 
-	// TODO the materials are not displaying correctly
-
 	VkResult result;
 
 	// =========================================================================
@@ -675,6 +805,7 @@ int main()
 	std::cout << "Using physical device: " << physicalDeviceProperties.deviceName << std::endl;
 
 	// Physical device features
+	// =========================================================================
 	VkPhysicalDeviceBufferDeviceAddressFeatures physicalDeviceBufferDeviceAddressFeatures{};
 	physicalDeviceBufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
 	physicalDeviceBufferDeviceAddressFeatures.pNext = NULL;
@@ -705,6 +836,7 @@ int main()
 	deviceFeatures.samplerAnisotropy = VK_TRUE;
 
 	// Physical device submission queue families
+	// =========================================================================
 	uint32_t queueFamilyPropertyCount = 0;
 	vkGetPhysicalDeviceQueueFamilyProperties(activePhysicalDeviceHandle, &queueFamilyPropertyCount, NULL);
 
@@ -742,6 +874,7 @@ int main()
 	deviceQueueCreateInfo.pQueuePriorities = queuePrioritiesList.data();
 
 	// Logical device
+	// =========================================================================
 	std::vector<const char*> deviceExtensionList =
 	{
 		"VK_KHR_ray_tracing_pipeline",
@@ -773,10 +906,12 @@ int main()
 	}
 
 	// Submission queue
+	// =========================================================================
 	VkQueue queueHandle = VK_NULL_HANDLE;
 	vkGetDeviceQueue(deviceHandle, queueFamilyIndex, 0, &queueHandle);
 
 	// Device pointer functions
+	// =========================================================================
 	PFN_vkGetBufferDeviceAddressKHR pvkGetBufferDeviceAddressKHR =
 		(PFN_vkGetBufferDeviceAddressKHR)vkGetDeviceProcAddr(
 			deviceHandle, "vkGetBufferDeviceAddressKHR");
@@ -823,6 +958,7 @@ int main()
 	memoryAllocateFlagsInfo.deviceMask = 0;
 
 	// Command pool
+	// =========================================================================
 	VkCommandPoolCreateInfo commandPoolCreateInfo{};
 	commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	commandPoolCreateInfo.pNext = NULL;
@@ -837,6 +973,7 @@ int main()
 	}
 
 	// Command buffers
+	// =========================================================================
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo{};
 	commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	commandBufferAllocateInfo.pNext = NULL;
@@ -853,6 +990,7 @@ int main()
 	}
 
 	// Surface features
+	// =========================================================================
 	VkSurfaceCapabilitiesKHR surfaceCapabilities;
 	result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(activePhysicalDeviceHandle, surfaceHandle, &surfaceCapabilities);
 	if (result != VK_SUCCESS)
@@ -889,6 +1027,7 @@ int main()
 	}
 
 	// Swapchain
+	// =========================================================================
 	VkSwapchainCreateInfoKHR swapchainCreateInfo{};
 	swapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 	swapchainCreateInfo.pNext = NULL;
@@ -917,6 +1056,7 @@ int main()
 	}
 
 	// Swapchain images
+	// =========================================================================
 	uint32_t swapchainImageCount = 0;
 	result = vkGetSwapchainImagesKHR(deviceHandle, swapchainHandle, &swapchainImageCount, NULL);
 	if (result != VK_SUCCESS)
@@ -963,6 +1103,7 @@ int main()
 	}
 
 	// Descriptor pool
+	// =========================================================================
 	std::vector<VkDescriptorPoolSize> descriptorPoolSizeList;
 
 	VkDescriptorPoolSize descriptorPool{};
@@ -1006,6 +1147,7 @@ int main()
 	}
 
 	// Descriptor set layout
+	// =========================================================================
 	std::vector<VkDescriptorSetLayoutBinding> descriptorSetLayoutBindingList;
 	VkDescriptorSetLayoutBinding descriptorSetLayoutBinding{};
 	descriptorSetLayoutBinding.binding = 0;
@@ -1051,7 +1193,7 @@ int main()
 	descriptorSetLayoutBinding.binding = 5;
 	descriptorSetLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	descriptorSetLayoutBinding.descriptorCount = 1;
-	descriptorSetLayoutBinding.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+	descriptorSetLayoutBinding.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
 	descriptorSetLayoutBinding.pImmutableSamplers = NULL;
 	descriptorSetLayoutBindingList.push_back(descriptorSetLayoutBinding);
 
@@ -1070,6 +1212,7 @@ int main()
 	}
 
 	// Material descriptor set layout
+	// =========================================================================
 	std::vector<VkDescriptorSetLayoutBinding> materialDescriptorSetLayoutBindingList;
 	VkDescriptorSetLayoutBinding desicriptorSetLayoutBinding{};
 	desicriptorSetLayoutBinding.binding = 0;
@@ -1102,6 +1245,7 @@ int main()
 	}
 
 	// Allocate descriptor sets
+	// =========================================================================
 	std::vector<VkDescriptorSetLayout> descriptorSetLayoutHandleList =
 	{
 		descriptorSetLayoutHandle,
@@ -1124,6 +1268,7 @@ int main()
 	}
 
 	// Pipeline layout
+	// =========================================================================
 	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo{};
 	pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutCreateInfo.pNext = NULL;
@@ -1141,6 +1286,7 @@ int main()
 	}
 
 	// Ray closest hit shader module
+	// =========================================================================
 	std::ifstream rayClosestHitFile("res/shaders/shader.rchit.spv", std::ios::binary | std::ios::ate);
 	std::streamsize rayClosestHitFileSize = rayClosestHitFile.tellg();
 	rayClosestHitFile.seekg(0, std::ios::beg);
@@ -1165,6 +1311,7 @@ int main()
 	}
 
 	// Ray generation shader module
+	// =========================================================================
 	std::ifstream rayGenerateFile("res/shaders/shader.rgen.spv", std::ios::binary | std::ios::ate);
 	std::streamsize rayGenerateFileSize = rayGenerateFile.tellg();
 	rayGenerateFile.seekg(0, std::ios::beg);
@@ -1189,6 +1336,7 @@ int main()
 	}
 
 	// Ray miss shader module
+	// =========================================================================
 	std::ifstream rayMissFile("res/shaders/shader.rmiss.spv", std::ios::binary | std::ios::ate);
 	std::streamsize rayMissFileSize = rayMissFile.tellg();
 	rayMissFile.seekg(0, std::ios::beg);
@@ -1213,6 +1361,7 @@ int main()
 	}
 
 	// Ray miss (shadow) shader module
+	// =========================================================================
 	std::ifstream rayMissShadowFile("res/shaders/shader_shadow.rmiss.spv", std::ios::binary | std::ios::ate);
 	std::streamsize rayMissShadowFileSize = rayMissShadowFile.tellg();
 	rayMissShadowFile.seekg(0, std::ios::beg);
@@ -1237,6 +1386,7 @@ int main()
 	}
 
 	// Ray tracing pipeline
+	// =========================================================================
 	std::vector<VkPipelineShaderStageCreateInfo> pipelineShaderStageCreateInfoList;
 	VkPipelineShaderStageCreateInfo pipelineShaderStageCreateInfo{};
 	pipelineShaderStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -1347,6 +1497,9 @@ int main()
 	}
 
 	// OBJ model
+	// =========================================================================
+
+	/*
 	tinyobj::ObjReaderConfig objReaderConfig;
 	tinyobj::ObjReader objReader;
 
@@ -1380,17 +1533,26 @@ int main()
 			indexList.push_back(index.vertex_index);
 		}
 	}
+	*/
+
+	std::vector<Vertex> vertices;
+	std::vector<uint32_t> indices;
+	std::vector<tinyobj::material_t> materials;
+	std::vector<tinyobj::shape_t> shapes;
+	uint32_t primitiveCount = 0;
+	LoadModel(vertices, indices, materials, shapes, primitiveCount);
 
 	std::cout << "Model loaded:" << std::endl;
 	std::cout << "  Primitives: " << primitiveCount << std::endl;
 	std::cout << "  Materials: " << materials.size() << std::endl;
+	std::cout << "  Vertices: " << vertices.size() << std::endl;
 
 	// Vertex buffer
 	VkBufferCreateInfo vertexBufferCreateInfo{};
 	vertexBufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	vertexBufferCreateInfo.pNext = NULL;
 	vertexBufferCreateInfo.flags = 0;
-	vertexBufferCreateInfo.size = sizeof(float) * attrib.vertices.size() * 3;
+	vertexBufferCreateInfo.size = sizeof(Vertex) * vertices.size();
 	vertexBufferCreateInfo.usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 		VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
 		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
@@ -1440,9 +1602,9 @@ int main()
 	}
 
 	void* hostVertexMemoryBuffer;
-	result = vkMapMemory(deviceHandle, vertexDeviceMemoryHandle, 0, sizeof(float) * attrib.vertices.size() * 3, 0, &hostVertexMemoryBuffer);
+	result = vkMapMemory(deviceHandle, vertexDeviceMemoryHandle, 0, sizeof(Vertex) * vertices.size(), 0, &hostVertexMemoryBuffer);
 
-	memcpy(hostVertexMemoryBuffer, attrib.vertices.data(), sizeof(float) * attrib.vertices.size() * 3);
+	memcpy(hostVertexMemoryBuffer, vertices.data(), sizeof(Vertex) * vertices.size());
 
 	if (result != VK_SUCCESS)
 	{
@@ -1463,7 +1625,7 @@ int main()
 	indexBufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	indexBufferCreateInfo.pNext = NULL;
 	indexBufferCreateInfo.flags = 0;
-	indexBufferCreateInfo.size = sizeof(uint32_t) * indexList.size();
+	indexBufferCreateInfo.size = sizeof(uint32_t) * indices.size();
 	indexBufferCreateInfo.usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 		VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
 		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
@@ -1513,9 +1675,9 @@ int main()
 	}
 
 	void* hostIndexMemoryBuffer;
-	result = vkMapMemory(deviceHandle, indexDeviceMemoryHandle, 0, sizeof(uint32_t) * indexList.size(), 0, &hostIndexMemoryBuffer);
+	result = vkMapMemory(deviceHandle, indexDeviceMemoryHandle, 0, sizeof(uint32_t) * indices.size(), 0, &hostIndexMemoryBuffer);
 
-	memcpy(hostIndexMemoryBuffer, indexList.data(), sizeof(uint32_t) * indexList.size());
+	memcpy(hostIndexMemoryBuffer, indices.data(), sizeof(uint32_t) * indices.size());
 
 	if (result != VK_SUCCESS)
 	{
@@ -1540,8 +1702,8 @@ int main()
 	VkDeviceOrHostAddressConstKHR deviceOrHostAddressConst{};
 	deviceOrHostAddressConst.deviceAddress = vertexBufferDeviceAddress;
 	accelerationStructureGeometryTrianglesData.vertexData = deviceOrHostAddressConst;
-	accelerationStructureGeometryTrianglesData.vertexStride = sizeof(float) * 3;
-	accelerationStructureGeometryTrianglesData.maxVertex = static_cast<uint32_t>(attrib.vertices.size());
+	accelerationStructureGeometryTrianglesData.vertexStride = sizeof(Vertex);
+	accelerationStructureGeometryTrianglesData.maxVertex = static_cast<uint32_t>(vertices.size());
 	accelerationStructureGeometryTrianglesData.indexType = VK_INDEX_TYPE_UINT32;
 	deviceOrHostAddressConst = {};
 	deviceOrHostAddressConst.deviceAddress = indexBufferDeviceAddress;
@@ -2985,8 +3147,6 @@ int main()
 			throw std::runtime_error("Failed to create swapchain image write semaphore!");
 		}
 	}
-
-	
 
 	// Main loop
 	uint32_t currentFrame = 0;

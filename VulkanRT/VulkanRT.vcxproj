@@ -152,7 +152,10 @@
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="inc\json.hpp" />
     <ClInclude Include="inc\stb_image.h" />
+    <ClInclude Include="inc\stb_image_write.h" />
+    <ClInclude Include="inc\tiny_gltf.h" />
     <ClInclude Include="tiny_obj_loader.h" />
   </ItemGroup>
   <ItemGroup>
