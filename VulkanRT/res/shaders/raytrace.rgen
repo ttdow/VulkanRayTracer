@@ -16,6 +16,7 @@ layout(binding = 1, set = 0) uniform Camera
   vec4 right;
   vec4 up;
   vec4 forward;
+  vec4 lightPosition[32];
 
   uint frameCount;
 } camera;
@@ -23,20 +24,21 @@ layout(binding = 1, set = 0) uniform Camera
 // Output image.
 layout(binding = 4, set = 0, rgba32f) uniform image2D image;
 
-layout(binding = 5) uniform sampler2D texSampler;
+layout(binding = 5) uniform sampler2D texSampler[85];
+
+layout(binding = 6, set = 0) buffer ReservoirBuffer
+{
+    Reservoir data[];
+} reservoirBuffer;
 
 void main()
 {
     // Start by computing the floating-point pixel coordinates of the current pixel being rendered.
     // gl_LaunchIDEXT contains the integer coords of the current pixel.
     // gl_LaunchSizeEXT contains the integer size of the image being rendered.
-    
-    vec2 uv = gl_LaunchIDEXT.xy + vec2(0.5); //vec2(random(gl_LaunchIDEXT.xy, 0), random(gl_LaunchIDEXT.xy, 1));
+    vec2 uv = gl_LaunchIDEXT.xy + vec2(random(gl_LaunchIDEXT.xy, 0), random(gl_LaunchIDEXT.xy, 1));
     uv = uv / vec2(gl_LaunchSizeEXT.xy);
     uv = (uv * 2.0f - 1.0f) * vec2(1.0f, -1.0f); // Need to flip along Y-axis or image will be upside down
-    //uv = (uv * 2.0f - 1.0f);
-
-    vec4 textureColor = texture(texSampler, uv);
 
     payload.rayOrigin = camera.position.xyz;
     payload.rayDirection = normalize(uv.x * camera.right + uv.y * camera.up + camera.forward).xyz;
@@ -55,8 +57,8 @@ void main()
     float tMin = 0.001;
     float tMax = 10000.0;
 
-    // Perfrom multiple recursive ray traces.
-    uint recursionDepth = 16;
+    // Perfrom multiple recursive ray traces for indirect lighting.
+    uint recursionDepth = 2;
     for (int x = 0; x < recursionDepth; x++)
     {
         traceRayEXT(topLevelAS,             // Acceleration structure.
@@ -73,6 +75,8 @@ void main()
     }
 
     // Determine the final pixel color using the payload data.
+    // directColor = texture color + lighting effects
+    // indirectColor = multi-bounce lighting effects
     vec4 color = vec4(payload.directColor + payload.indirectColor, 1.0);
 
     // Temporal sampling of pixel color data.
@@ -89,6 +93,4 @@ void main()
     imageStore(image,                       // Handle to final image output.
                ivec2(gl_LaunchIDEXT.xy),    // Integer pixel location in final image.
                color);                      // Pixel color.
-
-    //imageStore(image, ivec2(gl_LaunchIDEXT.xy), textureColor);
 }

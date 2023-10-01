@@ -19,6 +19,10 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/hash.hpp>
 
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_vulkan.h"
+
 #include <fstream>
 #include <iostream>
 #include <vector>
@@ -27,6 +31,8 @@
 #include <cstdlib>
 #include <array>
 #include <unordered_map>
+#include <set>
+#include <random>
 
 #define STRING_RESET "\033[0m"
 #define STRING_INFO "\033[37m"
@@ -42,47 +48,26 @@ static float cameraPosition[3];
 static float cameraYaw;
 static float cameraPitch;
 
+struct Reservoir
+{
+	float y;	// The output sample.
+	float wsum; // The sum of weights.
+	float M;	// The number of samples seen so far.
+	float W;	// Probablistic weight.
+};
+
 struct Vertex
 {
-	glm::vec3 pos;
-	glm::vec3 color;
-	glm::vec2 texCoord;
-
-	static VkVertexInputBindingDescription GetBindingDescription()
-	{
-		VkVertexInputBindingDescription bindingDescription{};
-		bindingDescription.binding = 0;
-		bindingDescription.stride = sizeof(Vertex);
-		bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-		return bindingDescription;
-	}
-
-	static std::array<VkVertexInputAttributeDescription, 3> GetAttributeDescriptions()
-	{
-		std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
-
-		attributeDescriptions[0].binding = 0;
-		attributeDescriptions[0].location = 0;
-		attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-		attributeDescriptions[0].offset = offsetof(Vertex, pos);
-
-		attributeDescriptions[0].binding = 0;
-		attributeDescriptions[0].location = 1;
-		attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-		attributeDescriptions[0].offset = offsetof(Vertex, color);
-
-		attributeDescriptions[0].binding = 0;
-		attributeDescriptions[0].location = 2;
-		attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-		attributeDescriptions[0].offset = offsetof(Vertex, texCoord);
-
-		return attributeDescriptions;
-	}
+	glm::vec3 pos;			// 0,  1,  2
+	glm::vec3 normal;		// 5,  6,  7
+	glm::vec2 texCoord;		// 3,  4
+	//glm::vec3 tangent;		// 8,  9,  10
+	//glm::vec3 bitangent;	// 11, 12, 13
 
 	bool operator==(const Vertex& other) const
 	{
-		return (pos == other.pos && color == other.color && texCoord == other.texCoord);
+		return (pos == other.pos && texCoord == other.texCoord && normal == other.normal);
+			//&& tangent == other.tangent && bitangent == other.bitangent);
 	}
 };
 
@@ -92,7 +77,7 @@ namespace std
 	{
 		size_t operator()(Vertex const& vertex) const
 		{
-			return ((hash<glm::vec3>()(vertex.pos) ^ (hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^ (hash<glm::vec2>()(vertex.texCoord) << 1);
+			return ((hash<glm::vec3>()(vertex.pos) ^ (hash<glm::vec3>()(vertex.normal) << 1)) >> 1) ^ (hash<glm::vec2>()(vertex.texCoord) << 1);
 		}
 	};
 }
@@ -363,6 +348,61 @@ void CreateImage(VkPhysicalDevice& physicalDevice, VkDevice& device, uint32_t wi
 	}
 }
 
+void CreateTextureImage(std::string filePath, VkPhysicalDevice& physicalDevice, VkDevice& device, VkQueue& graphicsQueue,
+	VkCommandPool& commandPool, ImageStruct& image)
+{
+	int texWidth, texHeight, texChannels;
+
+	std::string file = "res/sponza/" + filePath;
+
+	std::cout << "Loading texture: " << file << std::endl;
+
+	stbi_uc* pixels = stbi_load(file.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+
+	VkDeviceSize imageSize = texWidth * texHeight * 4;
+
+	if (!pixels)
+	{
+		throw std::runtime_error("Failed to load texture image!");
+	}
+
+	VkBuffer stagingBuffer;
+	VkDeviceMemory stagingBufferMemory;
+
+	CreateBuffer(physicalDevice, device, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		stagingBuffer, stagingBufferMemory);
+
+	void* data;
+	VkResult result = vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
+	memcpy(data, pixels, static_cast<size_t>(imageSize));
+
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to map texture image buffer memory!");
+	}
+
+	vkUnmapMemory(device, stagingBufferMemory);
+
+	stbi_image_free(pixels);
+
+	CreateImage(physicalDevice, device, texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
+		VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		image.image, image.imageMemory);
+
+	TransitionImageLayout(device, graphicsQueue, commandPool, image.image, VK_FORMAT_R8G8B8A8_SRGB,
+		VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+	CopyBufferToImage(device, graphicsQueue, commandPool, stagingBuffer, image.image,
+		static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
+
+	TransitionImageLayout(device, graphicsQueue, commandPool, image.image, VK_FORMAT_R8G8B8A8_SRGB,
+		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+	vkDestroyBuffer(device, stagingBuffer, nullptr);
+	vkFreeMemory(device, stagingBufferMemory, nullptr);
+}
+
 void CreateTextureImage(VkPhysicalDevice& physicalDevice, VkDevice& device, VkQueue& graphicsQueue, 
 	VkCommandPool& commandPool, ImageStruct& image)
 {
@@ -396,8 +436,6 @@ void CreateTextureImage(VkPhysicalDevice& physicalDevice, VkDevice& device, VkQu
 	vkUnmapMemory(device, stagingBufferMemory);
 
 	stbi_image_free(pixels);
-
-	std::cout << "Texture loaded successfully." << std::endl;
 
 	CreateImage(physicalDevice, device, texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, 
 		VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 
@@ -468,12 +506,12 @@ void CreateTextureSampler(VkPhysicalDevice& physicalDevice, VkDevice& device, Im
 }
 
 void LoadModel(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, std::vector<tinyobj::material_t>& materials, 
-	std::vector<tinyobj::shape_t>& shapes, uint32_t& primitiveCount)
+	std::vector<tinyobj::shape_t>& shapes, uint32_t& primitiveCount, std::set<uint32_t>& lampIndices)
 {
 	tinyobj::ObjReaderConfig objReaderConfig;
 	tinyobj::ObjReader objReader;
 
-	if (!objReader.ParseFromFile("res/cube_scene.obj", objReaderConfig))
+	if (!objReader.ParseFromFile("res/sponza/sponza.obj", objReaderConfig))
 	{
 		if (!objReader.Error().empty())
 		{
@@ -502,16 +540,52 @@ void LoadModel(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, st
 		{
 			Vertex vertex{};
 
-			vertex.pos[0] = attrib.vertices[3 * index.vertex_index + 0];
-			vertex.pos[1] = attrib.vertices[3 * index.vertex_index + 1];
-			vertex.pos[2] = attrib.vertices[3 * index.vertex_index + 2];
+			vertex.pos = glm::vec3(attrib.vertices[3 * index.vertex_index + 0],
+								   attrib.vertices[3 * index.vertex_index + 1],
+								   attrib.vertices[3 * index.vertex_index + 2]);
 
-			vertex.texCoord[0] = attrib.texcoords[2 * index.texcoord_index + 0];
-			vertex.texCoord[1] = 1.0f - attrib.texcoords[2 * index.texcoord_index + 1];
+			vertex.texCoord = glm::vec2(attrib.texcoords[2 * index.texcoord_index + 0],
+									    1.0f - attrib.texcoords[2 * index.texcoord_index + 1]);
 
-			vertex.color[0] = 1.0f;
-			vertex.color[1] = 1.0f;
-			vertex.color[2] = 1.0f;
+			vertex.normal = glm::vec3(attrib.normals[3 * index.normal_index + 0],
+									  attrib.normals[3 * index.normal_index + 1],
+									  attrib.normals[3 * index.normal_index + 2]);
+
+			/*
+			vertex.tangent = glm::vec3(0.0f, 0.0f, 0.0f);
+			vertex.bitangent = glm::vec3(0.0f, 0.0f, 0.0f);
+			if (3 * (index.vertex_index + 2) + 2 < attrib.vertices.size() || 2 * (index.texcoord_index + 2) + 1 < attrib.texcoords.size())
+			{
+				glm::vec3 v0 = vertex.pos;
+				glm::vec3 v1 = glm::vec3(attrib.vertices[3 * (index.vertex_index + 1) + 0],
+					attrib.vertices[3 * (index.vertex_index + 1) + 1],
+					attrib.vertices[3 * (index.vertex_index + 1) + 2]);
+				glm::vec3 v2 = glm::vec3(attrib.vertices[3 * (index.vertex_index + 2) + 0],
+					attrib.vertices[3 * (index.vertex_index + 2) + 1],
+					attrib.vertices[3 * (index.vertex_index + 2) + 2]);
+
+				glm::vec2 uv0 = vertex.texCoord;
+				glm::vec2 uv1 = glm::vec2(attrib.texcoords[2 * (index.texcoord_index + 1) + 0],
+					1.0f - attrib.texcoords[2 * (index.texcoord_index + 1) + 1]);
+				glm::vec2 uv2 = glm::vec2(attrib.texcoords[2 * (index.texcoord_index + 2) + 0],
+					1.0f - attrib.texcoords[2 * (index.texcoord_index + 2) + 1]);
+
+				glm::vec3 edge1 = v1 - v0;
+				glm::vec3 edge2 = v2 - v0;
+				glm::vec2 deltaUV1 = uv1 - uv0;
+				glm::vec2 deltaUV2 = uv2 - uv0;
+
+				float f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+
+				vertex.tangent = glm::normalize(glm::vec3(f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x),
+					f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y),
+					f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z)));
+
+				vertex.bitangent = glm::normalize(glm::vec3(f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x),
+					f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y),
+					f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z)));
+			}
+			*/
 
 			if (uniqueVertices.count(vertex) == 0)
 			{
@@ -522,13 +596,6 @@ void LoadModel(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, st
 			indices.push_back(uniqueVertices[vertex]);
 		}
 	}
-}
-
-void CreateVertexBuffer()
-{
-	VkBufferCreateInfo bufferInfo{};
-	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	//bufferInfo.size = sizeof(vertices)
 }
 
 class App
@@ -553,7 +620,7 @@ private:
 		glfwInit();
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 		glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-		pWindow = glfwCreateWindow(800, 600, "Vulkan Ray Tracing", nullptr, nullptr);
+		pWindow = glfwCreateWindow(1280, 720, "Vulkan Ray Tracing", glfwGetPrimaryMonitor(), nullptr);
 		glfwSetInputMode(pWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 		glfwSetKeyCallback(pWindow, KeyCallback);
 
@@ -673,6 +740,13 @@ int main()
 	return 1;
 	*/
 
+	// TODO Write better camera controls
+	// TODO Get glTF loader working
+	// TODO Add ImGui interface
+	// TODO Add normal maps
+	// TODO Add roughness maps
+	// TODO Add metalness maps
+
 	VkResult result;
 
 	// =========================================================================
@@ -680,7 +754,12 @@ int main()
 	glfwInit();
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-	GLFWwindow* pWindow = glfwCreateWindow(800, 600, "Vulkan Ray Tracing", nullptr, nullptr);
+	GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+	const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+	unsigned int windowWidth = mode->width;
+	unsigned int windowHeight = mode->height;
+	std::cout << windowWidth << "x" << windowHeight << std::endl;
+	GLFWwindow* pWindow = glfwCreateWindow(windowWidth, windowHeight, "Vulkan Ray Tracing", monitor, nullptr);
 	glfwSetInputMode(pWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 	glfwSetKeyCallback(pWindow, KeyCallback);
 
@@ -802,7 +881,23 @@ int main()
 	VkPhysicalDeviceMemoryProperties physicalDeviceMemoryProperties;
 	vkGetPhysicalDeviceMemoryProperties(activePhysicalDeviceHandle, &physicalDeviceMemoryProperties);
 
+	/*
 	std::cout << "Using physical device: " << physicalDeviceProperties.deviceName << std::endl;
+	std::cout << "  Device memory type count: " << physicalDeviceMemoryProperties.memoryTypeCount << std::endl;
+	std::cout << "  Device memory heap count: " << physicalDeviceMemoryProperties.memoryHeapCount << std::endl;
+
+	for (auto memType : physicalDeviceMemoryProperties.memoryTypes)
+	{
+		std::cout << "  Memory type heap index: " << memType.heapIndex << std::endl;
+		std::cout << "    Memory type property flags: " << memType.propertyFlags << std::endl;
+	}
+
+	for (auto memHeap : physicalDeviceMemoryProperties.memoryHeaps)
+	{
+		std::cout << "    Memory heap: " << memHeap.flags << std::endl;
+		std::cout << "      Memory heap size: " << memHeap.size << std::endl;
+	}
+	*/
 
 	// Physical device features
 	// =========================================================================
@@ -1131,6 +1226,11 @@ int main()
 	descriptorPool.descriptorCount = 1;
 	descriptorPoolSizeList.push_back(descriptorPool);
 
+	descriptorPool = {};
+	descriptorPool.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	descriptorPool.descriptorCount = 1;
+	descriptorPoolSizeList.push_back(descriptorPool);
+
 	VkDescriptorPoolCreateInfo descriptorPoolCreateInfo{};
 	descriptorPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	descriptorPoolCreateInfo.pNext = NULL;
@@ -1192,6 +1292,14 @@ int main()
 	descriptorSetLayoutBinding = {};
 	descriptorSetLayoutBinding.binding = 5;
 	descriptorSetLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	descriptorSetLayoutBinding.descriptorCount = 85;
+	descriptorSetLayoutBinding.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+	descriptorSetLayoutBinding.pImmutableSamplers = NULL;
+	descriptorSetLayoutBindingList.push_back(descriptorSetLayoutBinding);
+
+	descriptorSetLayoutBinding = {};
+	descriptorSetLayoutBinding.binding = 6;
+	descriptorSetLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 	descriptorSetLayoutBinding.descriptorCount = 1;
 	descriptorSetLayoutBinding.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
 	descriptorSetLayoutBinding.pImmutableSamplers = NULL;
@@ -1496,58 +1604,195 @@ int main()
 		throw std::runtime_error("Failed to create ray tracing pipeline!");
 	}
 
-	// OBJ model
+	// ImGUI
 	// =========================================================================
-
 	/*
-	tinyobj::ObjReaderConfig objReaderConfig;
-	tinyobj::ObjReader objReader;
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO(); (void)io;
 
-	if (!objReader.ParseFromFile("res/cube_scene.obj", objReaderConfig))
+	ImGui::StyleColorsDark();
+
+	VkDescriptorPoolSize imGuiPoolSizes[] =
 	{
-		if (!objReader.Error().empty())
-		{
-			throw std::runtime_error("Failed to find the OBJ file!");
-		}
+		{ VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+		{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
+	};
 
-		exit(1);
+	VkDescriptorPoolCreateInfo imGuiPoolInfo{};
+	imGuiPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	imGuiPoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+	imGuiPoolInfo.maxSets = static_cast<uint32_t>(11 * 1000);
+	imGuiPoolInfo.pPoolSizes = imGuiPoolSizes;
+
+	VkDescriptorPool imGuiDescriptorPool;
+	vkCreateDescriptorPool(deviceHandle, &imGuiPoolInfo, nullptr, &imGuiDescriptorPool);
+
+	ImGui_ImplGlfw_InitForVulkan(pWindow, true);
+	ImGui_ImplVulkan_InitInfo init_info{};
+	init_info.Instance = instanceHandle;
+	init_info.PhysicalDevice = activePhysicalDeviceHandle;
+	init_info.Device = deviceHandle;
+	init_info.QueueFamily = queueFamilyIndex;
+	init_info.Queue = queueHandle;
+	init_info.PipelineCache = VK_NULL_HANDLE;
+	init_info.DescriptorPool = imGuiDescriptorPool;
+	init_info.MinImageCount = surfaceCapabilities.minImageCount + 1;
+	init_info.ImageCount = swapchainImageCount;
+
+	VkAttachmentDescription attachment{};
+	attachment.format = swapchainCreateInfo.imageFormat;
+	attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+	attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+	attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+	VkAttachmentReference colorAttachment{};
+	colorAttachment.attachment = 0;
+	colorAttachment.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	VkSubpassDescription subpass{};
+	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpass.colorAttachmentCount = 1;
+	subpass.pColorAttachments = &colorAttachment;
+
+	VkSubpassDependency dependency{};
+	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+	dependency.dstSubpass = 0;
+	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependency.srcAccessMask = 0;
+	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+	VkRenderPassCreateInfo rpCreateInfo{};
+	rpCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	rpCreateInfo.attachmentCount = 1;
+	rpCreateInfo.pAttachments = &attachment;
+	rpCreateInfo.subpassCount = 1;
+	rpCreateInfo.pSubpasses = &subpass;
+	rpCreateInfo.dependencyCount = 1;
+	rpCreateInfo.pDependencies = &dependency;
+
+	VkRenderPass imGuiRenderPass;
+	result = vkCreateRenderPass(deviceHandle, &rpCreateInfo, nullptr, &imGuiRenderPass);
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to create ImGUI render pass!");
 	}
 
-	if (!objReader.Warning().empty())
-	{
-		std::cout << "TinyObjReader: " << objReader.Warning();
-	}
+	std::cout << "here" << std::endl;
 
-	const tinyobj::attrib_t& attrib = objReader.GetAttrib();
-	const std::vector<tinyobj::shape_t>& shapes = objReader.GetShapes();
-	const std::vector<tinyobj::material_t>& materials = objReader.GetMaterials();
+	VkCommandBuffer imGuiCommandBuffer = BeginSingleTimeCommands(deviceHandle, commandPoolHandle);
+	ImGui_ImplVulkan_CreateFontsTexture(imGuiCommandBuffer);
+	EndSingleTimeCommands(deviceHandle, queueHandle, commandPoolHandle, imGuiCommandBuffer);
 
-	uint32_t primitiveCount = 0;
-	std::vector<uint32_t> indexList;
-	for (tinyobj::shape_t shape : shapes)
-	{
-		primitiveCount += shape.mesh.num_face_vertices.size();
+	ImGui_ImplVulkan_Init(&init_info, imGuiRenderPass);
 
-		for (tinyobj::index_t index : shape.mesh.indices)
-		{
-			indexList.push_back(index.vertex_index);
-		}
-	}
+	std::cout << "Success!" << std::endl;
 	*/
 
+	// OBJ model
+	// =========================================================================
 	std::vector<Vertex> vertices;
 	std::vector<uint32_t> indices;
+	std::set<uint32_t> lampIndices;
 	std::vector<tinyobj::material_t> materials;
 	std::vector<tinyobj::shape_t> shapes;
 	uint32_t primitiveCount = 0;
-	LoadModel(vertices, indices, materials, shapes, primitiveCount);
+	LoadModel(vertices, indices, materials, shapes, primitiveCount, lampIndices);
 
 	std::cout << "Model loaded:" << std::endl;
 	std::cout << "  Primitives: " << primitiveCount << std::endl;
 	std::cout << "  Materials: " << materials.size() << std::endl;
 	std::cout << "  Vertices: " << vertices.size() << std::endl;
 
+	// Reservoir buffer
+	// =========================================================================
+	std::vector<Reservoir> reservoirs(windowWidth * windowHeight * 2);
+	VkBufferCreateInfo reservoirBufferCreateInfo{};
+	reservoirBufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	reservoirBufferCreateInfo.pNext = NULL;
+	reservoirBufferCreateInfo.flags = 0;
+	reservoirBufferCreateInfo.size = sizeof(Reservoir) * reservoirs.size();
+	reservoirBufferCreateInfo.usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+	reservoirBufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	reservoirBufferCreateInfo.pQueueFamilyIndices = &queueFamilyIndex;
+
+	VkBuffer reservoirBufferHandle = VK_NULL_HANDLE;
+	result = vkCreateBuffer(deviceHandle, &reservoirBufferCreateInfo, NULL, &reservoirBufferHandle);
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to create reservoir buffer!");
+	}
+
+	VkMemoryRequirements reservoirMemoryRequirements;
+	vkGetBufferMemoryRequirements(deviceHandle, reservoirBufferHandle, &reservoirMemoryRequirements);
+
+	uint32_t reservoirMemoryTypeIndex = -1;
+	for (uint32_t i = 0; i < physicalDeviceMemoryProperties.memoryTypeCount; i++)
+	{
+		if ((reservoirMemoryRequirements.memoryTypeBits & (1 << i)) &&
+			(physicalDeviceMemoryProperties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) ==
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+		{
+			reservoirMemoryTypeIndex = i;
+			break;
+		}
+	}
+
+	VkMemoryAllocateInfo reservoirMemoryAllocateInfo{};
+	reservoirMemoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	reservoirMemoryAllocateInfo.pNext = &memoryAllocateFlagsInfo;
+	reservoirMemoryAllocateInfo.allocationSize = reservoirMemoryRequirements.size;
+	reservoirMemoryAllocateInfo.memoryTypeIndex = reservoirMemoryTypeIndex;
+
+	VkDeviceMemory reservoirDeviceMemoryHandle = VK_NULL_HANDLE;
+	result = vkAllocateMemory(deviceHandle, &reservoirMemoryAllocateInfo, NULL, &reservoirDeviceMemoryHandle);
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to allocate reservoir buffer memory!");
+	}
+
+	result = vkBindBufferMemory(deviceHandle, reservoirBufferHandle, reservoirDeviceMemoryHandle, 0);
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to bind reservoir buffer memory!");
+	}
+
+	void* hostReservoirMemoryBuffer;
+	result = vkMapMemory(deviceHandle, reservoirDeviceMemoryHandle, 0, sizeof(Reservoir) * reservoirs.size(), 0, &hostReservoirMemoryBuffer);
+
+	memcpy(hostReservoirMemoryBuffer, reservoirs.data(), sizeof(Reservoir) * reservoirs.size());
+
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to map reservoir buffer memory!");
+	}
+
+	vkUnmapMemory(deviceHandle, reservoirDeviceMemoryHandle);
+
+	VkBufferDeviceAddressInfo reservoirBufferDeviceAddressInfo{};
+	reservoirBufferDeviceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+	reservoirBufferDeviceAddressInfo.pNext = NULL;
+	reservoirBufferDeviceAddressInfo.buffer = reservoirBufferHandle;
+
+	VkDeviceAddress reservoirBufferDeviceAddress = pvkGetBufferDeviceAddressKHR(deviceHandle, &reservoirBufferDeviceAddressInfo);
+
 	// Vertex buffer
+	// =========================================================================
 	VkBufferCreateInfo vertexBufferCreateInfo{};
 	vertexBufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	vertexBufferCreateInfo.pNext = NULL;
@@ -1621,6 +1866,7 @@ int main()
 	VkDeviceAddress vertexBufferDeviceAddress = pvkGetBufferDeviceAddressKHR(deviceHandle, &vertexBufferDeviceAddressInfo);
 
 	// Index buffer
+	// =========================================================================
 	VkBufferCreateInfo indexBufferCreateInfo{};
 	indexBufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	indexBufferCreateInfo.pNext = NULL;
@@ -2314,10 +2560,44 @@ int main()
 	// Uniform buffer
 	struct UniformStructure
 	{
-		float cameraPosition[4] = { 0, 0, 0, 1 };
+		float cameraPosition[4] = { 0, 1, 0, 1 };
 		float cameraRight[4] = { 1, 0, 0, 1 };
 		float cameraUp[4] = { 0, 1, 0, 1 };
 		float cameraForward[4] = { 0, 0, 1, 1 };
+
+		float lightPosition[32][4] = { { 0, 3, 5, 1 },
+									   { 0, 5, 0, 1 },
+									   { 0, 3, 0, 1 },
+									   { 0, 3, 0, 1 },
+									   { 0, 3, 0, 1 },
+									   { 0, 3, 0, 1 },
+									   { 0, 3, 0, 1 },
+									   { 0, 3, 0, 1 },
+									   { 0, 3, 0, 1 },
+									   { 0, 3, 0, 1 },
+									   { 0, 3, 0, 1 },
+									   { 0, 3, 0, 1 },
+									   { 0, 3, 0, 1 },
+									   { 0, 3, 0, 1 },
+									   { 0, 3, 0, 1 },
+									   { 0, 3, 0, 1 },
+									   { 0, 3, 0, 1 },
+									   { 0, 3, 0, 1 },
+									   { 0, 3, 0, 1 },
+									   { 0, 3, 0, 1 },
+									   { 0, 3, 0, 1 },
+									   { 0, 3, 0, 1 },
+									   { 0, 3, 0, 1 },
+									   { 0, 3, 0, 1 },
+									   { 0, 3, 0, 1 },
+									   { 0, 3, 0, 1 },
+									   { 0, 3, 0, 1 },
+									   { 0, 3, 0, 1 },
+									   { 0, 3, 0, 1 },
+									   { 0, 3, 0, 1 },
+									   { 0, 3, 0, 1 },
+									   { 0, 3, 0, 1 },
+		};
 
 		uint32_t frameCount = 0;
 	} uniformStructure;
@@ -2547,11 +2827,90 @@ int main()
 		throw std::runtime_error("Failed to wait for ray trace image barrier acceleration structure fence!");
 	}
 
-	// Texture
-	ImageStruct textureImage;
-	CreateTextureImage(activePhysicalDeviceHandle, deviceHandle, queueHandle, commandPoolHandle, textureImage);
-	CreateTextureImageView(deviceHandle, textureImage);
-	CreateTextureSampler(activePhysicalDeviceHandle, deviceHandle, textureImage);
+	// Get list of diffuse textures.
+	std::set<std::string> textureList;
+	for (auto& material : materials)
+	{
+		if (!material.diffuse_texname.empty())
+		{
+			textureList.insert(material.diffuse_texname);
+		}
+	}
+
+	// Get list of normal maps.
+	std::set<std::string> normalMapList;
+	for (auto& material : materials)
+	{
+		if (!material.bump_texname.empty())
+		{
+			normalMapList.insert(material.bump_texname);
+		}
+	}
+
+	// Get list of roughness maps.
+	std::set<std::string> roughMapList;
+	for (auto& material : materials)
+	{
+		if (!material.roughness_texname.empty())
+		{
+			roughMapList.insert(material.roughness_texname);
+		}
+	}
+
+	// Get list of metalness maps.
+	std::set<std::string> metalMapList;
+	for (auto& material : materials)
+	{
+		if (!material.metallic_texname.empty())
+		{
+			metalMapList.insert(material.metallic_texname);
+		}
+	}
+
+	std::cout << "Texture list size: " << textureList.size() << std::endl;
+	std::cout << "Normal map list size: " << normalMapList.size() << std::endl;
+	std::cout << "Rough map list size: " << roughMapList.size() << std::endl;
+	std::cout << "Metal map list size: " << metalMapList.size() << std::endl;
+
+	// Populate texture array.
+	std::vector<ImageStruct> textureImages(textureList.size() + normalMapList.size() + roughMapList.size() + metalMapList.size());
+	unsigned int idx = 0;
+	for (auto texture : textureList)
+	{
+		CreateTextureImage(texture, activePhysicalDeviceHandle, deviceHandle, queueHandle, commandPoolHandle, textureImages[idx]);
+		CreateTextureImageView(deviceHandle, textureImages[idx]);
+		CreateTextureSampler(activePhysicalDeviceHandle, deviceHandle, textureImages[idx]);
+		idx++;
+	}
+
+	// Append normal maps to texture array.
+	for (auto normalMap : normalMapList)
+	{
+		CreateTextureImage(normalMap, activePhysicalDeviceHandle, deviceHandle, queueHandle, commandPoolHandle, textureImages[idx]);
+		CreateTextureImageView(deviceHandle, textureImages[idx]);
+		CreateTextureSampler(activePhysicalDeviceHandle, deviceHandle, textureImages[idx]);
+		idx++;
+	}
+
+	// Append rough maps to texture array.
+	for (auto roughMap : roughMapList)
+	{
+		CreateTextureImage(roughMap, activePhysicalDeviceHandle, deviceHandle, queueHandle, commandPoolHandle, textureImages[idx]);
+		CreateTextureImageView(deviceHandle, textureImages[idx]);
+		CreateTextureSampler(activePhysicalDeviceHandle, deviceHandle, textureImages[idx]);
+		idx++;
+	}
+
+	// Append metal maps to texture array.
+	for (auto metalMap : metalMapList)
+	{
+		CreateTextureImage(metalMap, activePhysicalDeviceHandle, deviceHandle, queueHandle, commandPoolHandle, textureImages[idx]);
+		CreateTextureImageView(deviceHandle, textureImages[idx]);
+		CreateTextureSampler(activePhysicalDeviceHandle, deviceHandle, textureImages[idx]);
+		idx++;
+	}
+
+	std::cout << "Texture list size: " << textureImages.size() << std::endl;
 
 	// Update descriptor set
 	VkWriteDescriptorSetAccelerationStructureKHR accelerationStructureDescriptorInfo{};
@@ -2580,10 +2939,19 @@ int main()
 	rayTraceImageDescriptorInfo.imageView = rayTraceImageViewHandle;
 	rayTraceImageDescriptorInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
-	VkDescriptorImageInfo textureImageInfo{};
-	textureImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	textureImageInfo.imageView = textureImage.imageView;
-	textureImageInfo.sampler = textureImage.imageSampler;
+	std::vector<VkDescriptorImageInfo> descriptorImageInfos(textureImages.size());
+	for (uint32_t i = 0; i < textureImages.size(); i++)
+	{
+		descriptorImageInfos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		descriptorImageInfos[i].imageView = textureImages[i].imageView;
+		descriptorImageInfos[i].sampler = textureImages[i].imageSampler;
+		descriptorImageInfos[i].sampler = textureImages[i].imageSampler;
+	}
+
+	VkDescriptorBufferInfo reservoirDescriptorInfo{};
+	reservoirDescriptorInfo.buffer = reservoirBufferHandle;
+	reservoirDescriptorInfo.offset = 0;
+	reservoirDescriptorInfo.range = VK_WHOLE_SIZE;
 
 	std::vector<VkWriteDescriptorSet> writeDescriptorSetList;
 
@@ -2658,10 +3026,23 @@ int main()
 	writeDescriptorSet.dstSet = descriptorSetHandleList[0];
 	writeDescriptorSet.dstBinding = 5;
 	writeDescriptorSet.dstArrayElement = 0;
-	writeDescriptorSet.descriptorCount = 1;
+	writeDescriptorSet.descriptorCount = static_cast<uint32_t>(textureImages.size());
 	writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	writeDescriptorSet.pImageInfo = &textureImageInfo;
+	writeDescriptorSet.pImageInfo = descriptorImageInfos.data();
 	writeDescriptorSet.pBufferInfo = NULL;
+	writeDescriptorSet.pTexelBufferView = NULL;
+	writeDescriptorSetList.push_back(writeDescriptorSet);
+
+	writeDescriptorSet = {};
+	writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	writeDescriptorSet.pNext = NULL;
+	writeDescriptorSet.dstSet = descriptorSetHandleList[0];
+	writeDescriptorSet.dstBinding = 6;
+	writeDescriptorSet.dstArrayElement = 0;
+	writeDescriptorSet.descriptorCount = 1;
+	writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	writeDescriptorSet.pImageInfo = NULL;
+	writeDescriptorSet.pBufferInfo = &reservoirDescriptorInfo;
 	writeDescriptorSet.pTexelBufferView = NULL;
 	writeDescriptorSetList.push_back(writeDescriptorSet);
 
@@ -2673,7 +3054,23 @@ int main()
 	{
 		for (int index : shape.mesh.material_ids)
 		{
-			materialIndexList.push_back(index);
+			int idx = 0;
+			for (auto texture : textureList)
+			{
+				if (materials[index].diffuse_texname == texture)
+				{
+					break;
+				}
+
+				idx++;
+			}
+
+			if (idx > 22)
+			{
+				idx = 0;
+			}
+
+			materialIndexList.push_back(idx);
 		}
 	}
 
@@ -3152,8 +3549,8 @@ int main()
 	uint32_t currentFrame = 0;
 
 	cameraPosition[0] = 0.0f;
-	cameraPosition[1] = 3.0f;
-	cameraPosition[2] = 7.0f;
+	cameraPosition[1] = 1.0f;
+	cameraPosition[2] = 0.0f;
 
 	while (!glfwWindowShouldClose(pWindow))
 	{
@@ -3185,15 +3582,19 @@ int main()
 			cameraPosition[2] += sin(-cameraYaw) * 0.01f;
 			isCameraMoved = true;
 		}
-		if (keyDownIndex[GLFW_KEY_SPACE]) 
+		if (keyDownIndex[GLFW_KEY_E]) 
 		{
 			cameraPosition[1] += 0.01f;
 			isCameraMoved = true;
 		}
-		if (keyDownIndex[GLFW_KEY_LEFT_CONTROL]) 
+		if (keyDownIndex[GLFW_KEY_Q]) 
 		{
 			cameraPosition[1] -= 0.01f;
 			isCameraMoved = true;
+		}
+		if (keyDownIndex[GLFW_KEY_ESCAPE])
+		{
+			glfwSetWindowShouldClose(pWindow, true);
 		}
 
 		static double previousMousePositionX;
@@ -3204,7 +3605,7 @@ int main()
 		if (previousMousePositionX != xPos) 
 		{
 			double mouseDifferenceX = previousMousePositionX - xPos;
-			cameraYaw += mouseDifferenceX * 0.0005f;
+			cameraYaw += mouseDifferenceX * 0.005f;
 			previousMousePositionX = xPos;
 
 			isCameraMoved = 1;
@@ -3231,6 +3632,8 @@ int main()
 			uniformStructure.cameraRight[2] =
 				uniformStructure.cameraForward[0] * uniformStructure.cameraUp[1] -
 				uniformStructure.cameraForward[1] * uniformStructure.cameraUp[0];
+
+			uniformStructure.lightPosition[0][0] = 5.0 * sin(glfwGetTime());
 
 			uniformStructure.frameCount = 0;
 		}
@@ -3325,6 +3728,71 @@ int main()
 	delete[] shaderHandleBuffer;
 	vkFreeMemory(deviceHandle, shaderBindingTableDeviceMemoryHandle, NULL);
 	vkDestroyBuffer(deviceHandle, shaderBindingTableBufferHandle, NULL);
+
+	vkFreeMemory(deviceHandle, materialDeviceMemoryHandle, NULL);
+	vkDestroyBuffer(deviceHandle, materialBufferHandle, NULL);
+	vkFreeMemory(deviceHandle, materialIndexDeviceMemoryHandle, NULL);
+	vkDestroyBuffer(deviceHandle, materialIndexBufferHandle, NULL);
+	vkDestroyFence(deviceHandle, rayTraceImageBarrierAccelerationStructureBuildFenceHandle, NULL);
+
+	for (uint32_t i = 0; i < textureImages.size(); i++)
+	{
+		vkDestroySampler(deviceHandle, textureImages[i].imageSampler, NULL);
+		vkDestroyImageView(deviceHandle, textureImages[i].imageView, NULL);
+		vkFreeMemory(deviceHandle, textureImages[i].imageMemory, NULL);
+		vkDestroyImage(deviceHandle, textureImages[i].image, NULL);
+	}
+
+	vkDestroyImageView(deviceHandle, rayTraceImageViewHandle, NULL);
+	vkFreeMemory(deviceHandle, rayTraceImageDeviceMemoryHandle, NULL);
+	vkDestroyImage(deviceHandle, rayTraceImageHandle, NULL);
+	vkFreeMemory(deviceHandle, uniformDeviceMemoryHandle, NULL);
+	vkDestroyBuffer(deviceHandle, uniformBufferHandle, NULL);
+	vkDestroyFence(deviceHandle, topLevelAccelerationStructureBuildFenceHandle, NULL);
+
+	vkFreeMemory(deviceHandle, topLevelAccelerationStructureDeviceScratchMemoryHandle, NULL);
+	vkDestroyBuffer(deviceHandle, topLevelAccelerationStructureScratchBufferHandle, NULL);
+	pvkDestroyAccelerationStructureKHR(deviceHandle, topLevelAccelerationStructureHandle, NULL);
+	vkFreeMemory(deviceHandle, topLevelAccelerationStructureDeviceMemoryHandle, NULL);
+	vkDestroyBuffer(deviceHandle, topLevelAccelerationStructureBufferHandle, NULL);
+
+	vkFreeMemory(deviceHandle, bottomLevelGeometryInstanceDeviceMemoryHandle, NULL);
+	vkDestroyBuffer(deviceHandle, bottomLevelGeometryInstanceBufferHandle, NULL);
+	vkDestroyFence(deviceHandle, bottomLevelAccelerationStructureBuildFenceHandle, NULL);
+	vkFreeMemory(deviceHandle, bottomLevelAccelerationStructureDeviceScratchMemoryHandle, NULL);
+	vkDestroyBuffer(deviceHandle, bottomLevelAccelerationStructureScratchBufferHandle, NULL);
+	pvkDestroyAccelerationStructureKHR(deviceHandle, bottomLevelAccelerationStructureHandle, NULL);
+	vkFreeMemory(deviceHandle, bottomLevelAccelerationStructureDeviceMemoryHandle, NULL);
+	vkDestroyBuffer(deviceHandle, bottomLevelAccelerationStructureBufferHandle, NULL);
+
+	vkFreeMemory(deviceHandle, reservoirDeviceMemoryHandle, NULL);
+	vkDestroyBuffer(deviceHandle, reservoirBufferHandle, NULL);
+
+	vkFreeMemory(deviceHandle, indexDeviceMemoryHandle, NULL);
+	vkDestroyBuffer(deviceHandle, indexBufferHandle, NULL);
+	vkFreeMemory(deviceHandle, vertexDeviceMemoryHandle, NULL);
+	vkDestroyBuffer(deviceHandle, vertexBufferHandle, NULL);
+	vkDestroyPipeline(deviceHandle, rayTracingPipelineHandle, NULL);
+	vkDestroyShaderModule(deviceHandle, rayMissShadowShaderModuleHandle, NULL);
+	vkDestroyShaderModule(deviceHandle, rayMissShaderModuleHandle, NULL);
+	vkDestroyShaderModule(deviceHandle, rayGenerateShaderModuleHandle, NULL);
+	vkDestroyShaderModule(deviceHandle, rayClosestHitShaderModuleHandle, NULL);
+	vkDestroyPipelineLayout(deviceHandle, pipelineLayoutHandle, NULL);
+	vkDestroyDescriptorSetLayout(deviceHandle, materialDescriptorSetLayoutHandle, NULL);
+
+	vkDestroyDescriptorSetLayout(deviceHandle, descriptorSetLayoutHandle, NULL);
+	vkDestroyDescriptorPool(deviceHandle, descriptorPoolHandle, NULL);
+
+	for (uint32_t x = 0; x < swapchainImageCount; x++) 
+	{
+		vkDestroyImageView(deviceHandle, swapchainImageViewHandleList[x], NULL);
+	}
+
+	vkDestroySwapchainKHR(deviceHandle, swapchainHandle, NULL);
+	vkDestroyCommandPool(deviceHandle, commandPoolHandle, NULL);
+	vkDestroyDevice(deviceHandle, NULL);
+	vkDestroySurfaceKHR(instanceHandle, surfaceHandle, NULL);
+	vkDestroyInstance(instanceHandle, NULL);
 
 	return EXIT_SUCCESS;
 }
