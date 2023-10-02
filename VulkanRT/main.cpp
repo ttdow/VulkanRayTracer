@@ -403,57 +403,6 @@ void CreateTextureImage(std::string filePath, VkPhysicalDevice& physicalDevice, 
 	vkFreeMemory(device, stagingBufferMemory, nullptr);
 }
 
-void CreateTextureImage(VkPhysicalDevice& physicalDevice, VkDevice& device, VkQueue& graphicsQueue, 
-	VkCommandPool& commandPool, ImageStruct& image)
-{
-	int texWidth, texHeight, texChannels;
-	
-	stbi_uc* pixels = stbi_load("res/textures/texture.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-
-	VkDeviceSize imageSize = texWidth * texHeight * 4;
-
-	if (!pixels)
-	{
-		throw std::runtime_error("Failed to load texture image!");
-	}
-
-	VkBuffer stagingBuffer;
-	VkDeviceMemory stagingBufferMemory;
-
-	CreateBuffer(physicalDevice, device, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
-		stagingBuffer, stagingBufferMemory);
-
-	void* data;
-	VkResult result = vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
-	memcpy(data, pixels, static_cast<size_t>(imageSize));
-
-	if (result != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to map texture image buffer memory!");
-	}
-
-	vkUnmapMemory(device, stagingBufferMemory);
-
-	stbi_image_free(pixels);
-
-	CreateImage(physicalDevice, device, texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, 
-		VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 
-		image.image, image.imageMemory);
-
-	TransitionImageLayout(device, graphicsQueue, commandPool, image.image, VK_FORMAT_R8G8B8A8_SRGB, 
-		VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-	CopyBufferToImage(device, graphicsQueue, commandPool, stagingBuffer, image.image, 
-		static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
-
-	TransitionImageLayout(device, graphicsQueue, commandPool, image.image, VK_FORMAT_R8G8B8A8_SRGB, 
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-	vkDestroyBuffer(device, stagingBuffer, nullptr);
-	vkFreeMemory(device, stagingBufferMemory, nullptr);
-}
-
 VkImageView CreateImageView(VkDevice& device, VkImage image, VkFormat format)
 {
 	VkImageViewCreateInfo viewInfo{};
@@ -1246,6 +1195,55 @@ int main()
 		throw std::runtime_error("Failed to create descriptor pool!");
 	}
 
+	// OBJ model
+	// =========================================================================
+	std::vector<Vertex> vertices;
+	std::vector<uint32_t> indices;
+	std::set<uint32_t> lampIndices;
+	std::vector<tinyobj::material_t> materials;
+	std::vector<tinyobj::shape_t> shapes;
+	uint32_t primitiveCount = 0;
+	LoadModel(vertices, indices, materials, shapes, primitiveCount, lampIndices);
+
+	std::cout << "Model loaded:" << std::endl;
+	std::cout << "  Primitives: " << primitiveCount << std::endl;
+	std::cout << "  Materials: " << materials.size() << std::endl;
+	std::cout << "  Vertices: " << vertices.size() << std::endl;
+
+	// Get list of diffuse textures.
+	std::set<std::string> textureList;
+	for (auto& material : materials)
+	{
+		if (!material.diffuse_texname.empty())
+		{
+			textureList.insert(material.diffuse_texname);
+		}
+	}
+
+	// Get list of normal maps.
+	std::set<std::string> normalMapList;
+	for (auto& material : materials)
+	{
+		if (!material.bump_texname.empty())
+		{
+			normalMapList.insert(material.bump_texname);
+		}
+	}
+
+	// Get list of combined roughness/metalness maps.
+	std::set<std::string> combinedMapList;
+	for (auto& material : materials)
+	{
+		if (!material.roughness_texname.empty())
+		{
+			combinedMapList.insert(material.roughness_texname);
+		}
+	}
+
+	std::cout << "Texture list size: " << textureList.size() << std::endl;
+	std::cout << "Normal map list size: " << normalMapList.size() << std::endl;
+	std::cout << "Rough/Metal map list size: " << combinedMapList.size() << std::endl;
+
 	// Descriptor set layout
 	// =========================================================================
 	std::vector<VkDescriptorSetLayoutBinding> descriptorSetLayoutBindingList;
@@ -1292,7 +1290,7 @@ int main()
 	descriptorSetLayoutBinding = {};
 	descriptorSetLayoutBinding.binding = 5;
 	descriptorSetLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	descriptorSetLayoutBinding.descriptorCount = 85;
+	descriptorSetLayoutBinding.descriptorCount = static_cast<uint32_t>(textureList.size() + normalMapList.size() + combinedMapList.size());
 	descriptorSetLayoutBinding.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
 	descriptorSetLayoutBinding.pImmutableSamplers = NULL;
 	descriptorSetLayoutBindingList.push_back(descriptorSetLayoutBinding);
@@ -1703,20 +1701,7 @@ int main()
 	std::cout << "Success!" << std::endl;
 	*/
 
-	// OBJ model
-	// =========================================================================
-	std::vector<Vertex> vertices;
-	std::vector<uint32_t> indices;
-	std::set<uint32_t> lampIndices;
-	std::vector<tinyobj::material_t> materials;
-	std::vector<tinyobj::shape_t> shapes;
-	uint32_t primitiveCount = 0;
-	LoadModel(vertices, indices, materials, shapes, primitiveCount, lampIndices);
-
-	std::cout << "Model loaded:" << std::endl;
-	std::cout << "  Primitives: " << primitiveCount << std::endl;
-	std::cout << "  Materials: " << materials.size() << std::endl;
-	std::cout << "  Vertices: " << vertices.size() << std::endl;
+	
 
 	// Reservoir buffer
 	// =========================================================================
@@ -2827,53 +2812,8 @@ int main()
 		throw std::runtime_error("Failed to wait for ray trace image barrier acceleration structure fence!");
 	}
 
-	// Get list of diffuse textures.
-	std::set<std::string> textureList;
-	for (auto& material : materials)
-	{
-		if (!material.diffuse_texname.empty())
-		{
-			textureList.insert(material.diffuse_texname);
-		}
-	}
-
-	// Get list of normal maps.
-	std::set<std::string> normalMapList;
-	for (auto& material : materials)
-	{
-		if (!material.bump_texname.empty())
-		{
-			normalMapList.insert(material.bump_texname);
-		}
-	}
-
-	// Get list of roughness maps.
-	std::set<std::string> roughMapList;
-	for (auto& material : materials)
-	{
-		if (!material.roughness_texname.empty())
-		{
-			roughMapList.insert(material.roughness_texname);
-		}
-	}
-
-	// Get list of metalness maps.
-	std::set<std::string> metalMapList;
-	for (auto& material : materials)
-	{
-		if (!material.metallic_texname.empty())
-		{
-			metalMapList.insert(material.metallic_texname);
-		}
-	}
-
-	std::cout << "Texture list size: " << textureList.size() << std::endl;
-	std::cout << "Normal map list size: " << normalMapList.size() << std::endl;
-	std::cout << "Rough map list size: " << roughMapList.size() << std::endl;
-	std::cout << "Metal map list size: " << metalMapList.size() << std::endl;
-
 	// Populate texture array.
-	std::vector<ImageStruct> textureImages(textureList.size() + normalMapList.size() + roughMapList.size() + metalMapList.size());
+	std::vector<ImageStruct> textureImages(textureList.size() + normalMapList.size() + combinedMapList.size());
 	unsigned int idx = 0;
 	for (auto texture : textureList)
 	{
@@ -2892,19 +2832,10 @@ int main()
 		idx++;
 	}
 
-	// Append rough maps to texture array.
-	for (auto roughMap : roughMapList)
+	// Append combined rough/metal maps to texture array.
+	for (auto roughMap : combinedMapList)
 	{
 		CreateTextureImage(roughMap, activePhysicalDeviceHandle, deviceHandle, queueHandle, commandPoolHandle, textureImages[idx]);
-		CreateTextureImageView(deviceHandle, textureImages[idx]);
-		CreateTextureSampler(activePhysicalDeviceHandle, deviceHandle, textureImages[idx]);
-		idx++;
-	}
-
-	// Append metal maps to texture array.
-	for (auto metalMap : metalMapList)
-	{
-		CreateTextureImage(metalMap, activePhysicalDeviceHandle, deviceHandle, queueHandle, commandPoolHandle, textureImages[idx]);
 		CreateTextureImageView(deviceHandle, textureImages[idx]);
 		CreateTextureSampler(activePhysicalDeviceHandle, deviceHandle, textureImages[idx]);
 		idx++;

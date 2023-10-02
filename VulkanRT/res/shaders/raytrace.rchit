@@ -56,6 +56,8 @@ layout(binding = 6, set = 0) buffer ReservoirBuffer
     Reservoir data[];
 } reservoirs;
 
+layout(binding = 5) uniform sampler2D texSampler[72];
+
 vec3 uniformSampleHemisphere(vec2 uv) 
 {
     float z = uv.x;
@@ -73,11 +75,9 @@ vec3 alignHemisphereWithCoordinateSystem(vec3 hemisphere, vec3 up)
     return hemisphere.x * right + hemisphere.y * up + hemisphere.z * forward;
 }
 
-layout(binding = 5) uniform sampler2D texSampler[85];
-
 vec3 GetNormalFromMap(vec3 normalMap, vec3 T, vec3 B, vec3 N)
 {
-    vec3 tangentNormal = normalMap * 2.0 - 1.0;
+    vec3 tangentNormal = normalMap;// * 2.0 - 1.0;
 
     mat3 TBN = mat3(T, B, N);
 
@@ -140,7 +140,7 @@ float DistanceAttenuation(vec3 lightPos, vec3 fragPos)
     return attenuation;
 }
 
-vec3 TraceLight(int lightIndex, vec3 position, vec3 surfaceColor, vec3 surfaceNormal, vec3 surfaceRough, vec3 surfaceMetal)
+vec3 TraceLight(int lightIndex, vec3 position, vec3 surfaceColor, vec3 surfaceNormal, float surfaceRough, float surfaceMetal)
 {
     vec3 lightColor = vec3(1.0, 1.0, 1.0);
     if (lightIndex == 1)
@@ -202,8 +202,8 @@ vec3 TraceLight(int lightIndex, vec3 position, vec3 surfaceColor, vec3 surfaceNo
     {
         vec3 V = normalize(vec3(camera.position) - position);
         vec3 N = surfaceNormal;
-        float m = surfaceRough.x;
-        vec3 rho = mix(vec3(0.04), vec3(surfaceColor), surfaceMetal.x);
+        float m = surfaceRough;
+        vec3 rho = mix(vec3(0.04), vec3(surfaceColor), surfaceMetal);
         vec3 specBRDF = CookTorrance(L, V, N, m, rho);
 
         //float attenuation = DistanceAttenuation(lightPos, position);
@@ -306,12 +306,8 @@ void main()
     uint idx = materialIndexBuffer.data[gl_PrimitiveID];
     vec3 surfaceColor = vec3(texture(texSampler[idx], uv));
     vec3 surfaceNormal = GetNormalFromMap(vec3(texture(texSampler[idx+24], uv)), tangent, bitangent, geometricNormal);
-    vec3 surfaceRough = vec3(texture(texSampler[idx+48], uv));
-    vec3 surfaceMetal = vec3(0.0, 0.0, 0.0);
-    if (idx + 72 < 85)
-    {
-        surfaceMetal = vec3(texture(texSampler[idx+72], uv));
-    }
+    float surfaceRough = texture(texSampler[idx+48], uv).y;
+    float surfaceMetal = texture(texSampler[idx+48], uv).z;
 
     // Sample lighting for current frame.
     //float pHat = 0.0;
