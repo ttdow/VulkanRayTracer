@@ -12,6 +12,17 @@ map_Kd textures/ceiling.png
 map_Ns textures/white.png
 map_Bump -bm 1.000000 textures/white.png
 
+newmtl Ceiling.001
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 2
+map_Kd textures/ceiling.png
+map_Ns textures/white.png
+map_Bump -bm 1.000000 textures/white.png
+
 newmtl Floor
 Ns 250.000000
 Ka 1.000000 1.000000 1.000000
@@ -21,10 +32,40 @@ Ni 1.450000
 d 1.000000
 illum 2
 map_Kd textures/tiles.png
-map_Ns textures/white.png
-map_Bump -bm 1.000000 textures/white.png
+
+newmtl Floor.001
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 2
+map_Kd textures/tiles.png
 
 newmtl Light
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 1.000000 1.000000 1.000000
+Ni 1.450000
+d 1.000000
+illum 2
+map_Kd textures/light.png
+map_Ns textures/light.png
+map_Bump -bm 1.000000 textures/light.png
+
+newmtl Light.001
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 1.000000 1.000000 1.000000
+Ni 1.450000
+d 1.000000
+illum 2
+map_Kd textures/light.png
+map_Ns textures/light.png
+map_Bump -bm 1.000000 textures/light.png
+
+newmtl Light.002
 Ka 1.000000 1.000000 1.000000
 Ks 0.500000 0.500000 0.500000
 Ke 1.000000 1.000000 1.000000
@@ -46,7 +87,62 @@ map_Kd textures/metal.png
 map_Ns textures/green.png
 map_Bump -bm 1.000000 textures/green.png
 
+newmtl Metal.001
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 2
+map_Kd textures/metal.png
+map_Ns textures/green.png
+map_Bump -bm 1.000000 textures/green.png
+
+newmtl Metal.002
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 2
+map_Kd textures/metal.png
+map_Ns textures/green.png
+map_Bump -bm 1.000000 textures/green.png
+
+newmtl Metal.004
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 2
+map_Kd textures/metal.png
+map_Ns textures/green.png
+map_Bump -bm 1.000000 textures/green.png
+
 newmtl Plaster
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 2
+map_Kd textures/plaster.png
+map_Ns textures/cyan.png
+map_Bump -bm 1.000000 textures/cyan.png
+
+newmtl Plaster.001
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 2
+map_Kd textures/plaster.png
+map_Ns textures/cyan.png
+map_Bump -bm 1.000000 textures/cyan.png
+
+newmtl Plaster.002
 Ka 1.000000 1.000000 1.000000
 Ks 0.500000 0.500000 0.500000
 Ke 0.000000 0.000000 0.000000
