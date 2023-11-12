@@ -23,6 +23,9 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
 
+#include "Timer.h"
+#include "AudioSystem.h"
+
 #include <fstream>
 #include <iostream>
 #include <vector>
@@ -353,7 +356,7 @@ void CreateTextureImage(std::string filePath, VkPhysicalDevice& physicalDevice, 
 {
 	int texWidth, texHeight, texChannels;
 
-	std::string file = "res/sponza/" + filePath;
+	std::string file = "res/box/" + filePath; //"res/sponza/" + filePath;
 
 	std::cout << "Loading texture: " << file << std::endl;
 
@@ -454,13 +457,37 @@ void CreateTextureSampler(VkPhysicalDevice& physicalDevice, VkDevice& device, Im
 	VkResult result = vkCreateSampler(device, &samplerInfo, nullptr, &image.imageSampler);
 }
 
+void PrintDetails(std::vector<unsigned int>& indices, std::string name)
+{
+	unsigned int max = 0;
+	unsigned int min = UINT_MAX;
+
+	for (unsigned int index : indices)
+	{
+		if (index >= max)
+		{
+			max = index;
+		}
+		
+		if (index <= min)
+		{
+			min = index;
+		}
+	}
+
+	std::cout << "Min " << name << " element = " << min << std::endl;
+	std::cout << "Max " << name << " element = " << max << std::endl;
+	std::cout << "Size " << name << " = " << max - min - 1 << std::endl << std::endl;
+}
+
 void LoadModel(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, std::vector<tinyobj::material_t>& materials, 
 	std::vector<tinyobj::shape_t>& shapes, uint32_t& primitiveCount, std::set<uint32_t>& lampIndices)
 {
 	tinyobj::ObjReaderConfig objReaderConfig;
 	tinyobj::ObjReader objReader;
 
-	if (!objReader.ParseFromFile("res/sponza/sponza.obj", objReaderConfig))
+	//if (!objReader.ParseFromFile("res/sponza/neon_sponza4.obj", objReaderConfig))
+	if (!objReader.ParseFromFile("res/box/cornellbox.obj", objReaderConfig))
 	{
 		if (!objReader.Error().empty())
 		{
@@ -479,10 +506,26 @@ void LoadModel(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, st
 	shapes = objReader.GetShapes();
 	materials = objReader.GetMaterials();
 
+	/*
+	std::vector<unsigned int> noodleBowlIndices;
+	std::vector<unsigned int> catIndices;
+	std::vector<unsigned int> noodlesIndices;
+	std::vector<unsigned int> dragonIndices;
+	std::vector<unsigned int> womanIndices;
+	std::vector<unsigned int> openIndices;
+	std::vector<unsigned int> sphereIndices;
+	std::vector<unsigned int> lamp01Indices;
+	std::vector<unsigned int> lampGlass01Indices;
+	*/
+
+	std::vector<unsigned int> ceiling;
+
 	std::unordered_map<Vertex, uint32_t> uniqueVertices{};
 
 	for (const auto& shape : shapes)
 	{
+		std::cout << shape.name << std::endl;
+
 		primitiveCount += shape.mesh.num_face_vertices.size();
 
 		for (const auto& index : shape.mesh.indices)
@@ -500,42 +543,6 @@ void LoadModel(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, st
 									  attrib.normals[3 * index.normal_index + 1],
 									  attrib.normals[3 * index.normal_index + 2]);
 
-			/*
-			vertex.tangent = glm::vec3(0.0f, 0.0f, 0.0f);
-			vertex.bitangent = glm::vec3(0.0f, 0.0f, 0.0f);
-			if (3 * (index.vertex_index + 2) + 2 < attrib.vertices.size() || 2 * (index.texcoord_index + 2) + 1 < attrib.texcoords.size())
-			{
-				glm::vec3 v0 = vertex.pos;
-				glm::vec3 v1 = glm::vec3(attrib.vertices[3 * (index.vertex_index + 1) + 0],
-					attrib.vertices[3 * (index.vertex_index + 1) + 1],
-					attrib.vertices[3 * (index.vertex_index + 1) + 2]);
-				glm::vec3 v2 = glm::vec3(attrib.vertices[3 * (index.vertex_index + 2) + 0],
-					attrib.vertices[3 * (index.vertex_index + 2) + 1],
-					attrib.vertices[3 * (index.vertex_index + 2) + 2]);
-
-				glm::vec2 uv0 = vertex.texCoord;
-				glm::vec2 uv1 = glm::vec2(attrib.texcoords[2 * (index.texcoord_index + 1) + 0],
-					1.0f - attrib.texcoords[2 * (index.texcoord_index + 1) + 1]);
-				glm::vec2 uv2 = glm::vec2(attrib.texcoords[2 * (index.texcoord_index + 2) + 0],
-					1.0f - attrib.texcoords[2 * (index.texcoord_index + 2) + 1]);
-
-				glm::vec3 edge1 = v1 - v0;
-				glm::vec3 edge2 = v2 - v0;
-				glm::vec2 deltaUV1 = uv1 - uv0;
-				glm::vec2 deltaUV2 = uv2 - uv0;
-
-				float f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
-
-				vertex.tangent = glm::normalize(glm::vec3(f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x),
-					f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y),
-					f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z)));
-
-				vertex.bitangent = glm::normalize(glm::vec3(f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x),
-					f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y),
-					f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z)));
-			}
-			*/
-
 			if (uniqueVertices.count(vertex) == 0)
 			{
 				uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
@@ -543,8 +550,67 @@ void LoadModel(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, st
 			}
 
 			indices.push_back(uniqueVertices[vertex]);
+
+			if (shape.name == "Ceiling")
+			{
+				ceiling.push_back(indices.back());
+			}
+			
+			/*
+			if (shape.name == "cat")
+			{
+				catIndices.push_back(indices.back());
+			}
+			else if (shape.name == "dragon")
+			{
+				dragonIndices.push_back(indices.back());
+			}
+			else if (shape.name == "noodle_bowl")
+			{
+				noodleBowlIndices.push_back(indices.back());
+			}
+			else if (shape.name == "noodles")
+			{
+				noodlesIndices.push_back(indices.back());
+			}
+			else if (shape.name == "open")
+			{
+				openIndices.push_back(indices.back());
+			}
+			else if (shape.name == "sphere")
+			{
+				sphereIndices.push_back(indices.back());
+			}
+			else if (shape.name == "woman")
+			{
+				womanIndices.push_back(indices.back());
+			}
+			else if (shape.name == "lamp_light_01")
+			{
+				lamp01Indices.push_back(indices.back());
+			}
+			else if (shape.name == "lamp_glass_01")
+			{
+				lampGlass01Indices.push_back(indices.back());
+			}
+			*/
 		}
 	}
+
+	// Print min/max index for each light.
+	/*
+	PrintDetails(catIndices, "cat");
+	PrintDetails(dragonIndices, "dragon");
+	PrintDetails(noodleBowlIndices, "noodle bowl");
+	PrintDetails(noodlesIndices, "noodles");
+	PrintDetails(openIndices, "open");
+	PrintDetails(sphereIndices, "sphere");
+	PrintDetails(womanIndices, "woman");
+	PrintDetails(lamp01Indices, "lamp01");
+	PrintDetails(lampGlass01Indices, "lampGlass01");
+	*/
+
+	PrintDetails(ceiling, "Ceiling");
 }
 
 class App
@@ -673,29 +739,6 @@ private:
 
 int main()
 {
-	/*
-	App app;
-
-	try
-	{
-		app.Run();
-	}
-	catch (const std::exception& e)
-	{
-		std::cerr << e.what() << std::endl;
-		return EXIT_FAILURE;
-	}
-
-	return 1;
-	*/
-
-	// TODO Write better camera controls
-	// TODO Get glTF loader working
-	// TODO Add ImGui interface
-	// TODO Add normal maps
-	// TODO Add roughness maps
-	// TODO Add metalness maps
-
 	VkResult result;
 
 	// =========================================================================
@@ -705,10 +748,10 @@ int main()
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 	GLFWmonitor* monitor = glfwGetPrimaryMonitor();
 	const GLFWvidmode* mode = glfwGetVideoMode(monitor);
-	unsigned int windowWidth = mode->width;
-	unsigned int windowHeight = mode->height;
+	unsigned int windowWidth = 1920;// mode->width;
+	unsigned int windowHeight = 1080;// mode->height;
 	std::cout << windowWidth << "x" << windowHeight << std::endl;
-	GLFWwindow* pWindow = glfwCreateWindow(windowWidth, windowHeight, "Vulkan Ray Tracing", monitor, nullptr);
+	GLFWwindow* pWindow = glfwCreateWindow(windowWidth, windowHeight, "Vulkan Ray Tracing", nullptr /*monitor*/, nullptr);
 	glfwSetInputMode(pWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 	glfwSetKeyCallback(pWindow, KeyCallback);
 
@@ -811,10 +854,12 @@ int main()
 	}
 
 	// TODO replace this with a function that gets the best device.
-	VkPhysicalDevice activePhysicalDeviceHandle = physicalDeviceHandleList[1];
+	VkPhysicalDevice activePhysicalDeviceHandle = physicalDeviceHandleList[0];
 
 	VkPhysicalDeviceProperties physicalDeviceProperties;
 	vkGetPhysicalDeviceProperties(activePhysicalDeviceHandle, &physicalDeviceProperties);
+
+	std::cout << "Physical device: " << physicalDeviceProperties.deviceName << std::endl;
 
 	VkPhysicalDeviceRayTracingPipelinePropertiesKHR physicalDeviceRayTracingPipelineProperties{};
 	physicalDeviceRayTracingPipelineProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
@@ -2550,22 +2595,22 @@ int main()
 		float cameraUp[4] = { 0, 1, 0, 1 };
 		float cameraForward[4] = { 0, 0, 1, 1 };
 
-		float lightPosition[32][4] = { { 0, 3, 5, 1 },
-									   { 0, 5, 0, 1 },
-									   { 0, 3, 0, 1 },
-									   { 0, 3, 0, 1 },
-									   { 0, 3, 0, 1 },
-									   { 0, 3, 0, 1 },
-									   { 0, 3, 0, 1 },
-									   { 0, 3, 0, 1 },
-									   { 0, 3, 0, 1 },
-									   { 0, 3, 0, 1 },
-									   { 0, 3, 0, 1 },
-									   { 0, 3, 0, 1 },
-									   { 0, 3, 0, 1 },
-									   { 0, 3, 0, 1 },
-									   { 0, 3, 0, 1 },
-									   { 0, 3, 0, 1 },
+		float lightPosition[32][4] = { {  -9.9f, 4.1f, -4.7f, 1 },
+									   {  -5.9f, 4.1f, -4.7f, 1 },
+									   {  -1.9f, 4.1f, -4.7f, 1 },
+									   {   2.1f, 4.1f, -4.7f, 1 },
+									   {   6.1f, 4.1f, -4.7f, 1 },
+									   {  10.1f, 4.1f, -4.7f, 1 },
+									   {  10.0f, 4.1f,  4.8f, 1 },
+									   {   6.0f, 4.1f,  4.8f, 1 },
+									   {   2.2f, 4.1f,  4.8f, 1 },
+									   {  -1.9f, 4.1f,  4.8f, 1 },
+									   {  -5.9f, 4.1f,  4.8f, 1 },
+									   {  -9.8f, 4.1f,  4.8f, 1 },
+									   { -13.2f, 3.7f,  0.2f, 1 },
+									   {  15.6f, 3.2f,	0.9f, 1 },
+									   {  19.5f, 1.5f,  2.8f, 1 },
+									   { -7.6f,  8.6f,  2.5f, 1 },
 									   { 0, 3, 0, 1 },
 									   { 0, 3, 0, 1 },
 									   { 0, 3, 0, 1 },
@@ -2994,11 +3039,6 @@ int main()
 				}
 
 				idx++;
-			}
-
-			if (idx > 22)
-			{
-				idx = 0;
 			}
 
 			materialIndexList.push_back(idx);
@@ -3483,44 +3523,75 @@ int main()
 	cameraPosition[1] = 1.0f;
 	cameraPosition[2] = 0.0f;
 
+	float cameraMoveSpeed = 0.1f;
+
+	//AudioSystem audioSystem;
+	//audioSystem.Load("edge2.wav");
+
+	Timer* timer = Timer::GetInstance();
+
+	uint32_t secondCounter = 0;
+
 	while (!glfwWindowShouldClose(pWindow))
 	{
+		bool sec = timer->GetFPS();
+
+		if (sec)
+		{
+			//std::cout << "CameraPos: (" << cameraPosition[0] << ", " << cameraPosition[1] << ", " << cameraPosition[2] << ")" << std::endl;
+
+			/*
+			uint32_t sum = 0;
+			uint32_t start = static_cast<uint32_t>(audioSystem.frequency) * secondCounter;
+			for (uint32_t i = start; i < (start + static_cast<uint32_t>(audioSystem.frequency)); i++)
+			{
+				sum += static_cast<uint32_t>(audioSystem.testData[i]);
+			}
+
+			uint32_t mean = sum / static_cast<uint32_t>(audioSystem.frequency);
+
+			std::cout << mean << std::endl;
+
+			secondCounter++;
+			*/
+		}
+
 		glfwPollEvents();
 
 		bool isCameraMoved = false;
 
 		if (keyDownIndex[GLFW_KEY_W]) 
 		{
-			cameraPosition[0] += cos(-cameraYaw - (M_PI / 2)) * 0.01f;
-			cameraPosition[2] += sin(-cameraYaw - (M_PI / 2)) * 0.01f;
+			cameraPosition[0] += cos(-cameraYaw - (M_PI / 2)) * cameraMoveSpeed;
+			cameraPosition[2] += sin(-cameraYaw - (M_PI / 2)) * cameraMoveSpeed;
 			isCameraMoved = true;
 		}
 		if (keyDownIndex[GLFW_KEY_S]) 
 		{
-			cameraPosition[0] -= cos(-cameraYaw - (M_PI / 2)) * 0.01f;
-			cameraPosition[2] -= sin(-cameraYaw - (M_PI / 2)) * 0.01f;
+			cameraPosition[0] -= cos(-cameraYaw - (M_PI / 2)) * cameraMoveSpeed;
+			cameraPosition[2] -= sin(-cameraYaw - (M_PI / 2)) * cameraMoveSpeed;
 			isCameraMoved = true;
 		}
 		if (keyDownIndex[GLFW_KEY_A]) 
 		{
-			cameraPosition[0] -= cos(-cameraYaw) * 0.01f;
-			cameraPosition[2] -= sin(-cameraYaw) * 0.01f;
+			cameraPosition[0] -= cos(-cameraYaw) * cameraMoveSpeed;
+			cameraPosition[2] -= sin(-cameraYaw) * cameraMoveSpeed;
 			isCameraMoved = true;
 		}
 		if (keyDownIndex[GLFW_KEY_D]) 
 		{
-			cameraPosition[0] += cos(-cameraYaw) * 0.01f;
-			cameraPosition[2] += sin(-cameraYaw) * 0.01f;
+			cameraPosition[0] += cos(-cameraYaw) * cameraMoveSpeed;
+			cameraPosition[2] += sin(-cameraYaw) * cameraMoveSpeed;
 			isCameraMoved = true;
 		}
 		if (keyDownIndex[GLFW_KEY_E]) 
 		{
-			cameraPosition[1] += 0.01f;
+			cameraPosition[1] += cameraMoveSpeed;
 			isCameraMoved = true;
 		}
 		if (keyDownIndex[GLFW_KEY_Q]) 
 		{
-			cameraPosition[1] -= 0.01f;
+			cameraPosition[1] -= cameraMoveSpeed;
 			isCameraMoved = true;
 		}
 		if (keyDownIndex[GLFW_KEY_ESCAPE])
@@ -3564,7 +3635,7 @@ int main()
 				uniformStructure.cameraForward[0] * uniformStructure.cameraUp[1] -
 				uniformStructure.cameraForward[1] * uniformStructure.cameraUp[0];
 
-			uniformStructure.lightPosition[0][0] = 5.0 * sin(glfwGetTime());
+			//uniformStructure.lightPosition[0][0] = 5.0 * sin(glfwGetTime());
 
 			uniformStructure.frameCount = 0;
 		}
@@ -3640,6 +3711,8 @@ int main()
 		}
 
 		currentFrame = (currentFrame + 1) % swapchainImageCount;
+
+		//audioSystem.UpdateStream();
 	}
 
 	// Cleanup

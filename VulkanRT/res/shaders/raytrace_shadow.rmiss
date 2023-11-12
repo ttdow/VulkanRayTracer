@@ -8,6 +8,5 @@ layout(location = 1) rayPayloadInEXT bool isShadow;
 
 void main() 
 {
-	// Current ray 
-	isShadow = false; 
+	isShadow = false;
 }

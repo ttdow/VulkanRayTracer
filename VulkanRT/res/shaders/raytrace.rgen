@@ -12,19 +12,19 @@ layout(location = 0) rayPayloadEXT Payload payload;
 layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
 layout(binding = 1, set = 0) uniform Camera
 {
-  vec4 position;
-  vec4 right;
-  vec4 up;
-  vec4 forward;
-  vec4 lightPosition[32];
+    vec4 position;
+    vec4 right;
+    vec4 up;
+    vec4 forward;
+    vec4 lightPosition[32];
 
-  uint frameCount;
+    uint frameCount;
 } camera;
 
 // Output image.
 layout(binding = 4, set = 0, rgba32f) uniform image2D image;
 
-layout(binding = 5) uniform sampler2D texSampler[72];
+layout(binding = 5) uniform sampler2D texSampler[111];
 
 layout(binding = 6, set = 0) buffer ReservoirBuffer
 {
@@ -33,52 +33,92 @@ layout(binding = 6, set = 0) buffer ReservoirBuffer
 
 void main()
 {
-    // Start by computing the floating-point pixel coordinates of the current pixel being rendered.
     // gl_LaunchIDEXT contains the integer coords of the current pixel.
-    // gl_LaunchSizeEXT contains the integer size of the image being rendered.
-    vec2 uv = gl_LaunchIDEXT.xy + vec2(random(gl_LaunchIDEXT.xy, 0), random(gl_LaunchIDEXT.xy, 1));
-    uv = uv / vec2(gl_LaunchSizeEXT.xy);
-    uv = (uv * 2.0f - 1.0f) * vec2(1.0f, -1.0f); // Need to flip along Y-axis or image will be upside down
-
-    payload.rayOrigin = camera.position.xyz;
-    payload.rayDirection = normalize(uv.x * camera.right + uv.y * camera.up + camera.forward).xyz;
-    payload.previousNormal = vec3(0.0, 0.0, 0.0);
-
-    payload.directColor = vec3(0.0, 0.0, 0.0);
-    payload.indirectColor = vec3(0.0, 0.0, 0.0);
-    payload.rayDepth = 0;
-
-    payload.rayActive = 1;
-
-    // All geometry is opaque (i.e. no transparency)
-    uint rayFlags = gl_RayFlagsOpaqueEXT;
+    uvec2 pixelCoord = gl_LaunchIDEXT.xy;
+    
+    // Make random seed values.
+    float r1 = pixelCoord.x + camera.frameCount;
+    float r2 = pixelCoord.y + sin(float(camera.frameCount));
+    vec2 seed = vec2(r1, r2);
+    
+    vec3 radiance = vec3(0.0);
 
     // Min and max of potential ray intersections.
     float tMin = 0.001;
     float tMax = 10000.0;
 
-    // Perfrom multiple recursive ray traces for indirect lighting.
-    uint recursionDepth = 2;
-    for (int x = 0; x < recursionDepth; x++)
+    // Iterate multiple samples per pixel?
+    uint sampleCount = 1;
+    for (int i = 0; i < sampleCount; i++)
     {
-        traceRayEXT(topLevelAS,             // Acceleration structure.
-                    rayFlags,               // Flags.
-                    0xFF,                   // Cull mask.
-                    0,                      // Shader Binding Table hit group for offset.
-                    0,                      // Shader Binding Table hit group for stride.
-                    0,                      // Shader Binding Table miss shader index.
-                    payload.rayOrigin,      // Ray origin.
-                    tMin,                   // Ray min range.
-                    payload.rayDirection,   // Ray direction.
-                    tMax,                   // Ray max range.
-                    0);                     // Payload (location = 0)
+        // Create random offset coords.
+        float dx = rand(seed) * 2.0 - 1.0;
+        float dy = rand(vec2(sampleCount, rand(seed))) * 2.0 - 1.0;
+
+        // Compute floating-point pixel coordinates of the current pixel being rendered with a random offset.
+        vec2 uv = vec2(pixelCoord.x + dx, pixelCoord.y + dy);
+
+        // Normalize (gl_LaunchSizeEXT contains the integer size of the image being rendered).
+        uv = uv / vec2(gl_LaunchSizeEXT.xy);
+
+        // Convert from [0, 1] -> [-1, 1].
+        uv = (uv * 2.0f - 1.0f);
+
+        // Flip along the Y-axis.
+        uv *= vec2(1.0f, -1.0f);
+
+        // Initialize this ray's payload.
+        payload.rayOrigin = camera.position.xyz;
+        payload.rayDirection = normalize(uv.x * camera.right + uv.y * camera.up + camera.forward).xyz;
+        payload.previousNormal = vec3(0.0, 0.0, 0.0);
+        payload.directColor = vec3(0.0, 0.0, 0.0);
+        payload.indirectColor = vec3(0.0, 0.0, 0.0);
+        payload.accumulation = vec3(1.0, 1.0, 1.0);
+        payload.rayDepth = 0;
+        payload.rayActive = 1;
+
+        // All geometry is opaque (i.e. no transparency).
+        uint rayFlags = gl_RayFlagsOpaqueEXT;
+
+        // Perfrom multiple iterative path traces for indirect lighting effects.
+        uint maxPathDepth = 2;
+
+        //for (int x = 0; x < pathLength; x++)
+        while (payload.rayActive == 1)
+        {
+            traceRayEXT(topLevelAS,           // Acceleration structure.
+                        rayFlags,             // Flags.
+                        0xFF,                 // Cull mask.
+                        0,                    // Shader Binding Table hit group for offset.
+                        0,                    // Shader Binding Table hit group for stride.
+                        0,                    // Shader Binding Table miss shader index.
+                        payload.rayOrigin,    // Ray origin.
+                        tMin,                 // Ray min range.
+                        payload.rayDirection, // Ray direction.
+                        tMax,                 // Ray max range.
+                        0);                   // Payload (location = 0)
+
+            if (payload.rayDepth >= maxPathDepth)
+            {
+                payload.rayActive = 0;
+            }
+        }
+
+        radiance += (payload.directColor + payload.indirectColor);
+
+        //radiance.x = clamp(radiance.x, 0.0, 1.0);
+        //radiance.y = clamp(radiance.y, 0.0, 1.0);
+        //radiance.z = clamp(radiance.z, 0.0, 1.0);
+
+        seed = vec2(rand(vec2(dy + sin(uv.x), dx + cos(float(camera.frameCount)))));
     }
 
-    // Determine the final pixel color using the payload data.
-    // directColor = texture color + lighting effects
-    // indirectColor = multi-bounce lighting effects
-    vec4 color = vec4(payload.directColor + payload.indirectColor, 1.0);
+    radiance /= sampleCount;
 
+    vec4 color = vec4(radiance, 1.0);
+
+    //vec4 color = vec4(payload.directColor, 1.0);
+    
     // Temporal sampling of pixel color data.
     if (camera.frameCount > 0)
     {
@@ -90,7 +130,7 @@ void main()
     }
 
     // Finally, write the resulting payload into the output image for rendering.
-    imageStore(image,                       // Handle to final image output.
-               ivec2(gl_LaunchIDEXT.xy),    // Integer pixel location in final image.
-               color);                      // Pixel color.
+    imageStore(image,                    // Handle to final image output.
+               ivec2(gl_LaunchIDEXT.xy), // Integer pixel location in final image.
+               color);                   // Pixel color.
 }

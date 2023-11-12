@@ -42,6 +42,12 @@
     <ClCompile Include="imgui_tables.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Timer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="AudioSystem.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="tiny_obj_loader.h">
@@ -86,6 +92,15 @@
     <ClInclude Include="imgui_stdlib.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Timer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="AudioClip.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="AudioSystem.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="res\shaders\shader.rchit" />
@@ -98,6 +113,9 @@
     <None Include="res\shaders\raytrace_shadow.rmiss" />
     <None Include="res\shaders\raycommon.glsl" />
     <None Include="imgui.natstepfilter" />
+    <None Include="res\shaders\raytrace.glsl" />
+    <None Include="res\shaders\raytrace2.rchit" />
+    <None Include="res\shaders\raytrace3.rchit" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="res\textures\texture.jpg">
@@ -106,5 +124,8 @@
   </ItemGroup>
   <ItemGroup>
     <Natvis Include="imgui.natvis" />
+  </ItemGroup>
+  <ItemGroup>
+    <Library Include="lib\glfw3.lib" />
   </ItemGroup>
 </Project>
