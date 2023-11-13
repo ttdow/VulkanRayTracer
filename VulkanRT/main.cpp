@@ -486,7 +486,6 @@ void LoadModel(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, st
 	tinyobj::ObjReaderConfig objReaderConfig;
 	tinyobj::ObjReader objReader;
 
-	//if (!objReader.ParseFromFile("res/sponza/neon_sponza4.obj", objReaderConfig))
 	if (!objReader.ParseFromFile("res/box/cornellbox.obj", objReaderConfig))
 	{
 		if (!objReader.Error().empty())
@@ -854,7 +853,7 @@ int main()
 	}
 
 	// TODO replace this with a function that gets the best device.
-	VkPhysicalDevice activePhysicalDeviceHandle = physicalDeviceHandleList[0];
+	VkPhysicalDevice activePhysicalDeviceHandle = physicalDeviceHandleList[1];
 
 	VkPhysicalDeviceProperties physicalDeviceProperties;
 	vkGetPhysicalDeviceProperties(activePhysicalDeviceHandle, &physicalDeviceProperties);

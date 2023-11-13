@@ -56,7 +56,7 @@ layout(binding = 6, set = 0) buffer ReservoirBuffer
     Reservoir data[];
 } reservoirs;
 
-layout(binding = 5) uniform sampler2D texSampler[15];
+layout(binding = 5) uniform sampler2D texSampler[];
 
 vec3 UniformSampleHemisphere(vec2 uv) 
 {
@@ -121,14 +121,14 @@ void ApplyBRDF(ivec3 indices, vec3 hitPosition, vec3 N, vec2 seed)
     seed = vec2(r1, r2);
 
     // Pick a reflection type based on the probability score generated.
-    //if (p <= 0.95)
-    //{
+    if (p <= 0.95)
+    {
         DiffuseReflection(hitPosition, N, seed);
-    //}
-    //else
-    //{
-    //    SpecularReflection(hitPosition, N);
-    //}
+    }
+    else
+    {
+        SpecularReflection(hitPosition, N);
+    }
 }
 
 bool CastShadowRay(vec3 hitPosition, vec3 lightPosition)
@@ -203,10 +203,86 @@ vec3 GetRandomPositionOnLight(uint lightPrimitiveID, vec2 seed)
     return lightPosition;
 }
 
+float SpecularDistribution(float roughness, vec3 H, vec3 N)
+{
+    float a = pow(roughness, 2);
+    float a2 = a * a;
+
+    float NdotHSquared = max(dot(N, H), 0.001);
+    NdotHSquared *= NdotHSquared;
+
+    float denom = NdotHSquared * (a2 - 1.0) + 1.0;
+    denom *= denom;
+    denom *= 3.14159;
+
+    return a2 / max(denom, 0.001);
+}
+
+vec3 Fresnel(vec3 H, vec3 V, vec3 f0)
+{
+    float VdotH = max(dot(V, H), 0.001);
+    float VdotH5 = pow(1 - VdotH, 5);
+
+    vec3 finalValue = f0 + (1 - f0) * VdotH5;
+
+    return finalValue;
+}
+
+float GeometricShadowing(vec3 N, vec3 V, vec3 H, float roughness)
+{
+    float k = pow(roughness + 1.0, 2) / 8.0;
+    float NdotV = max(dot(N, V), 0.001);
+
+    return NdotV / max((NdotV * (1 - k) + k), 0.001);
+}
+
+void CookTorranceRaytrace(vec3 N, vec3 H, float roughness, vec3 V, vec3 f0, vec3 L, out vec3 F, out float D, out float G)
+{
+    D = SpecularDistribution(roughness, H, N);
+    F = Fresnel(H, V, f0);
+    G = GeometricShadowing(N, V, H, roughness) * GeometricShadowing(N, L, H, roughness);
+}
+
+float CalculateDiffuse(vec3 N, vec3 L)
+{
+    L = normalize(L);
+    N = normalize(N);
+
+    float NdotL = max(dot(N, L), 0.001);
+
+    return NdotL;
+}
+
+vec3 PBRRaytrace(vec3 lightPosition, vec3 lightColor, vec3 N, vec3 hitPosition, vec3 cameraPos, float roughness, float metalness, vec3 albedo)
+{
+    vec3 F;  // Fresnel
+    float D; // GGX
+    float G; // Geometric shading
+
+    vec3 L = normalize(lightPosition - hitPosition);
+    vec3 V = normalize(cameraPos - hitPosition);
+    vec3 H = normalize(L + V);
+    N = normalize(N);
+
+    CookTorranceRaytrace(N, H, roughness, V, albedo, L, F, D, G);
+
+    float lambert = CalculateDiffuse(N, L);
+    vec3 ks = F;
+    vec3 kd = vec3(1.0) - ks;
+    kd *= (vec3(1.0) - metalness);
+
+    vec3 numSpec = D * F * G;
+    float denomSpec = 4.0 * max(dot(N, V), 0.001) * max(dot(N, L), 0.001);
+    vec3 specular = numSpec / max(denomSpec, 0.001);
+
+    return ((kd * albedo / 3.14159) + specular) * lambert * lightColor;
+}
+
 void main()
 {
     // Check if the first path hits a light directly.
-    if (payload.rayDepth == 0 && (gl_PrimitiveID == 46 || gl_PrimitiveID == 47))
+    if (payload.rayDepth == 0 && 
+        (gl_PrimitiveID == 44 || gl_PrimitiveID == 45 || gl_PrimitiveID == 54 || gl_PrimitiveID == 55 || gl_PrimitiveID == 68 || gl_PrimitiveID == 69))
     {
         payload.directColor = vec3(1.0);
         payload.rayActive = 0;
@@ -264,17 +340,61 @@ void main()
     float r2 = rand(vec2(sin(hitPosition.z * gl_LaunchIDEXT.y), cos(uv.y * camera.frameCount)));
     vec2 seed = vec2(r1, r2);
 
+    vec3 randomLightPosition44 = GetRandomPositionOnLight(44, seed);
+    float length44 = 1.0 / distance(hitPosition, randomLightPosition44);
+
+    vec3 randomLightPosition45 = GetRandomPositionOnLight(45, seed);
+    float length45 = 1.0 / distance(hitPosition, randomLightPosition45);
+
+    vec3 randomLightPosition54 = GetRandomPositionOnLight(54, seed);
+    float length54 = 1.0 / distance(hitPosition, randomLightPosition54);
+
+    vec3 randomLightPosition55 = GetRandomPositionOnLight(55, seed);
+    float length55 = 1.0 / distance(hitPosition, randomLightPosition55);
+
+    vec3 randomLightPosition68 = GetRandomPositionOnLight(68, seed);
+    float length68 = 1.0 / distance(hitPosition, randomLightPosition68);
+
+    vec3 randomLightPosition69 = GetRandomPositionOnLight(69, seed);
+    float length69 = 1.0 / distance(hitPosition, randomLightPosition69);
+
+    float lengthSum = length44 + length45 + length54 + length55 + length68 + length69;
+
+    length44 /= lengthSum;
+    length45 /= lengthSum;
+    length54 /= lengthSum;
+    length55 /= lengthSum;
+    length68 /= lengthSum;
+    length69 /= lengthSum;
+
     // Get a random position on the light source.
     float p = rand(seed);
     seed = vec2(sin(p * camera.frameCount), cos(p + r2));
+
     vec3 randomLightPosition = vec3(0.0);
-    if (p >= 0.5)
+    if (p < length44)
     {
-        randomLightPosition = GetRandomPositionOnLight(46, seed);
+        randomLightPosition = randomLightPosition44;
+    }
+    else if (p < length44 + length45)
+    {
+        randomLightPosition = randomLightPosition45;
+    }
+    else if (p < length44 + length45 + length54)
+    {
+        randomLightPosition = randomLightPosition54;
+    }
+    else if (p < length44 + length45 + length54 + length55)
+    {
+        randomLightPosition = randomLightPosition55;
+    }
+    else if (p < length44 + length45 + length54 + length55 + length68)
+    {
+        randomLightPosition = randomLightPosition68;
     }
     else
     {
-        randomLightPosition = GetRandomPositionOnLight(47, seed);
+        randomLightPosition = randomLightPosition69;
     }
     seed = vec2(sin(p * randomLightPosition.z), sin(randomLightPosition.x * p));
 
@@ -282,7 +402,8 @@ void main()
     bool isShadow = CastShadowRay(hitPosition, randomLightPosition);
     if (!isShadow)
     {
-        payload.directColor += payload.accumulation * lightColor;// * lightIntensity;
+        //payload.directColor += payload.accumulation * lightColor; // * lightIntensity;
+        payload.directColor = PBRRaytrace(randomLightPosition, lightColor, N, hitPosition, camera.position.xyz, 0.5, 0.25, albedo);
     }
 
     // Reflect the ray in a new direction.

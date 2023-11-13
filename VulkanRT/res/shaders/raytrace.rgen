@@ -81,7 +81,7 @@ void main()
         uint rayFlags = gl_RayFlagsOpaqueEXT;
 
         // Perfrom multiple iterative path traces for indirect lighting effects.
-        uint maxPathDepth = 2;
+        uint maxPathDepth = 1;
 
         //for (int x = 0; x < pathLength; x++)
         while (payload.rayActive == 1)
@@ -106,9 +106,9 @@ void main()
 
         radiance += (payload.directColor + payload.indirectColor);
 
-        //radiance.x = clamp(radiance.x, 0.0, 1.0);
-        //radiance.y = clamp(radiance.y, 0.0, 1.0);
-        //radiance.z = clamp(radiance.z, 0.0, 1.0);
+        radiance.x = clamp(radiance.x, 0.0, 1.0);
+        radiance.y = clamp(radiance.y, 0.0, 1.0);
+        radiance.z = clamp(radiance.z, 0.0, 1.0);
 
         seed = vec2(rand(vec2(dy + sin(uv.x), dx + cos(float(camera.frameCount)))));
     }
@@ -120,14 +120,14 @@ void main()
     //vec4 color = vec4(payload.directColor, 1.0);
     
     // Temporal sampling of pixel color data.
-    if (camera.frameCount > 0)
-    {
-        vec4 previousColor = imageLoad(image, ivec2(gl_LaunchIDEXT.xy));
-        previousColor *= camera.frameCount;
+    //if (camera.frameCount > 0)
+    //{
+    //    vec4 previousColor = imageLoad(image, ivec2(gl_LaunchIDEXT.xy));
+    //    previousColor *= camera.frameCount;
 
-        color += previousColor;
-        color /= (camera.frameCount + 1);
-    }
+    //    color += previousColor;
+    //    color /= (camera.frameCount + 1);
+    //}
 
     // Finally, write the resulting payload into the output image for rendering.
     imageStore(image,                    // Handle to final image output.
