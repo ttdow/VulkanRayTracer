@@ -199,6 +199,7 @@
     <None Include="res\shaders\raytrace2.rchit" />
     <None Include="res\shaders\raytrace.glsl" />
     <None Include="res\shaders\raytrace3.rchit" />
+    <None Include="res\shaders\raytrace4.rchit" />
     <None Include="res\shaders\raytrace_shadow.rmiss" />
     <None Include="res\shaders\shader.rchit" />
     <None Include="res\shaders\shader.rgen" />

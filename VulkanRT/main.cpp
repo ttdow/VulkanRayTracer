@@ -356,7 +356,7 @@ void CreateTextureImage(std::string filePath, VkPhysicalDevice& physicalDevice, 
 {
 	int texWidth, texHeight, texChannels;
 
-	std::string file = "res/box/" + filePath; //"res/sponza/" + filePath;
+	std::string file = "res/bistro/" + filePath; //"res/box/" + filePath; //"res/sponza/" + filePath;
 
 	std::cout << "Loading texture: " << file << std::endl;
 
@@ -486,7 +486,7 @@ void LoadModel(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, st
 	tinyobj::ObjReaderConfig objReaderConfig;
 	tinyobj::ObjReader objReader;
 
-	if (!objReader.ParseFromFile("res/box/cornellbox.obj", objReaderConfig))
+	if (!objReader.ParseFromFile(/*"res/box/cornellbox.obj""res/box/GIBox.obj"*/"res/bistro/bistro_exterior.obj", objReaderConfig))
 	{
 		if (!objReader.Error().empty())
 		{
@@ -523,8 +523,6 @@ void LoadModel(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, st
 
 	for (const auto& shape : shapes)
 	{
-		std::cout << shape.name << std::endl;
-
 		primitiveCount += shape.mesh.num_face_vertices.size();
 
 		for (const auto& index : shape.mesh.indices)
@@ -549,8 +547,8 @@ void LoadModel(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, st
 			}
 
 			indices.push_back(uniqueVertices[vertex]);
-
-			if (shape.name == "Ceiling")
+			
+			if (shape.name == "Bistro_Research_Exterior_paris_Bistroawning_4095")
 			{
 				ceiling.push_back(indices.back());
 			}
@@ -747,8 +745,8 @@ int main()
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 	GLFWmonitor* monitor = glfwGetPrimaryMonitor();
 	const GLFWvidmode* mode = glfwGetVideoMode(monitor);
-	unsigned int windowWidth = 1920;// mode->width;
-	unsigned int windowHeight = 1080;// mode->height;
+	unsigned int windowWidth = 1920; // mode->width;
+	unsigned int windowHeight = 1080; // mode->height;
 	std::cout << windowWidth << "x" << windowHeight << std::endl;
 	GLFWwindow* pWindow = glfwCreateWindow(windowWidth, windowHeight, "Vulkan Ray Tracing", nullptr /*monitor*/, nullptr);
 	glfwSetInputMode(pWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
@@ -853,7 +851,7 @@ int main()
 	}
 
 	// TODO replace this with a function that gets the best device.
-	VkPhysicalDevice activePhysicalDeviceHandle = physicalDeviceHandleList[1];
+	VkPhysicalDevice activePhysicalDeviceHandle = physicalDeviceHandleList[0];
 
 	VkPhysicalDeviceProperties physicalDeviceProperties;
 	vkGetPhysicalDeviceProperties(activePhysicalDeviceHandle, &physicalDeviceProperties);
@@ -1254,6 +1252,14 @@ int main()
 	std::cout << "  Materials: " << materials.size() << std::endl;
 	std::cout << "  Vertices: " << vertices.size() << std::endl;
 
+	/*
+	for (auto& material : materials)
+	{
+		std::cout << material.name << std::endl;
+		std::cout << "\t(" << material.emission[0] << ", " << material.emission[1] << ", " << material.emission[2] << ")" << std::endl;
+	}
+	*/
+
 	// Get list of diffuse textures.
 	std::set<std::string> textureList;
 	for (auto& material : materials)
@@ -1284,9 +1290,20 @@ int main()
 		}
 	}
 
+	// Get list of emission maps.
+	std::set<std::string> emissiveMapList;
+	for (auto& material : materials)
+	{
+		if (!material.emissive_texname.empty())
+		{
+			emissiveMapList.insert(material.emissive_texname);
+		}
+	}
+
 	std::cout << "Texture list size: " << textureList.size() << std::endl;
 	std::cout << "Normal map list size: " << normalMapList.size() << std::endl;
 	std::cout << "Rough/Metal map list size: " << combinedMapList.size() << std::endl;
+	std::cout << "Emissive map list size: " << emissiveMapList.size() << std::endl;
 
 	// Descriptor set layout
 	// =========================================================================
@@ -1334,7 +1351,7 @@ int main()
 	descriptorSetLayoutBinding = {};
 	descriptorSetLayoutBinding.binding = 5;
 	descriptorSetLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	descriptorSetLayoutBinding.descriptorCount = static_cast<uint32_t>(textureList.size() + normalMapList.size() + combinedMapList.size());
+	descriptorSetLayoutBinding.descriptorCount = static_cast<uint32_t>(textureList.size() + normalMapList.size() + combinedMapList.size() + emissiveMapList.size());
 	descriptorSetLayoutBinding.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
 	descriptorSetLayoutBinding.pImmutableSamplers = NULL;
 	descriptorSetLayoutBindingList.push_back(descriptorSetLayoutBinding);
@@ -1745,8 +1762,6 @@ int main()
 	std::cout << "Success!" << std::endl;
 	*/
 
-	
-
 	// Reservoir buffer
 	// =========================================================================
 	std::vector<Reservoir> reservoirs(windowWidth * windowHeight * 2);
@@ -1755,8 +1770,7 @@ int main()
 	reservoirBufferCreateInfo.pNext = NULL;
 	reservoirBufferCreateInfo.flags = 0;
 	reservoirBufferCreateInfo.size = sizeof(Reservoir) * reservoirs.size();
-	reservoirBufferCreateInfo.usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
-		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+	reservoirBufferCreateInfo.usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
 	reservoirBufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	reservoirBufferCreateInfo.pQueueFamilyIndices = &queueFamilyIndex;
 
@@ -2857,7 +2871,7 @@ int main()
 	}
 
 	// Populate texture array.
-	std::vector<ImageStruct> textureImages(textureList.size() + normalMapList.size() + combinedMapList.size());
+	std::vector<ImageStruct> textureImages(textureList.size() + normalMapList.size() + combinedMapList.size() + emissiveMapList.size());
 	unsigned int idx = 0;
 	for (auto texture : textureList)
 	{
@@ -2880,6 +2894,15 @@ int main()
 	for (auto roughMap : combinedMapList)
 	{
 		CreateTextureImage(roughMap, activePhysicalDeviceHandle, deviceHandle, queueHandle, commandPoolHandle, textureImages[idx]);
+		CreateTextureImageView(deviceHandle, textureImages[idx]);
+		CreateTextureSampler(activePhysicalDeviceHandle, deviceHandle, textureImages[idx]);
+		idx++;
+	}
+
+	// Append emissive maps to texture array.
+	for (auto emissiveMap : emissiveMapList)
+	{
+		CreateTextureImage(emissiveMap, activePhysicalDeviceHandle, deviceHandle, queueHandle, commandPoolHandle, textureImages[idx]);
 		CreateTextureImageView(deviceHandle, textureImages[idx]);
 		CreateTextureSampler(activePhysicalDeviceHandle, deviceHandle, textureImages[idx]);
 		idx++;
@@ -3518,14 +3541,14 @@ int main()
 	// Main loop
 	uint32_t currentFrame = 0;
 
-	cameraPosition[0] = 0.0f;
-	cameraPosition[1] = 1.0f;
-	cameraPosition[2] = 0.0f;
+	cameraPosition[0] = -17.951f;
+	cameraPosition[1] = 3.9f;
+	cameraPosition[2] = 1.79772f;
 
 	float cameraMoveSpeed = 0.1f;
 
-	//AudioSystem audioSystem;
-	//audioSystem.Load("edge2.wav");
+	AudioSystem audioSystem;
+	audioSystem.Load("le_festin.wav");
 
 	Timer* timer = Timer::GetInstance();
 
@@ -3614,6 +3637,8 @@ int main()
 
 		if (isCameraMoved) 
 		{
+			//std::cout << "(" << cameraPosition[0] << ", " << cameraPosition[1] << ", " << cameraPosition[2] << ")\n";
+
 			uniformStructure.cameraPosition[0] = cameraPosition[0];
 			uniformStructure.cameraPosition[1] = cameraPosition[1];
 			uniformStructure.cameraPosition[2] = cameraPosition[2];
@@ -3711,7 +3736,7 @@ int main()
 
 		currentFrame = (currentFrame + 1) % swapchainImageCount;
 
-		//audioSystem.UpdateStream();
+		audioSystem.UpdateStream();
 	}
 
 	// Cleanup

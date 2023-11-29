@@ -53,10 +53,10 @@ layout(binding = 1, set = 1) buffer MaterialBuffer
 
 layout(binding = 6, set = 0) buffer ReservoirBuffer
 {
-    Reservoir data[];
+    Reservoir data[]; // size = windowWidth * windowHeight * 2
 } reservoirs;
 
-layout(binding = 5) uniform sampler2D texSampler[];
+layout(binding = 5) uniform sampler2D texSampler[13];
 
 vec3 UniformSampleHemisphere(vec2 uv) 
 {
@@ -278,17 +278,90 @@ vec3 PBRRaytrace(vec3 lightPosition, vec3 lightColor, vec3 N, vec3 hitPosition, 
     return ((kd * albedo / 3.14159) + specular) * lambert * lightColor;
 }
 
+float GGXDistribution(vec3 H, vec3 N, float roughness)
+{
+    float a = roughness * roughness;
+    float a2 = a * a;
+
+    float NdotH = max(dot(N, H), 0.0);
+    float NdotH2 = NdotH * NdotH;
+
+    float num = a2;
+    float denom = NdotH2 * (a2 - 1.0) + 1.0;
+    denom = max(M_PI * denom * denom, EPSILON);
+
+    return (num / denom);
+}
+
+float GeometrySchlickGGX(float NdotV, float roughness)
+{
+    float r = (roughness + 1.0);
+    float k = (r * r) / 8.0;
+
+    float num = NdotV;
+    float denom = NdotV * (1.0 - k) + k;
+
+    return (num / denom);
+}
+
+float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
+{
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    
+    float ggx2 = GeometrySchlickGGX(NdotV, roughness);
+    float ggx1 = GeometrySchlickGGX(NdotL, roughness);
+
+    return (ggx1 * ggx2);
+}
+
+vec3 FresnelSchlick(float cosTheta, vec3 F0)
+{
+    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+vec3 CookTorranceBRDF(vec3 lightPosition, vec3 lightColor, float lightPower, vec3 N, vec3 hitPosition, vec3 cameraPosition, float roughness, float metalness, vec3 albedo)
+{
+    vec3 L = normalize(lightPosition - hitPosition);
+    vec3 V = normalize(cameraPosition - hitPosition);
+    vec3 H = normalize(V + L);
+    N = normalize(N);
+
+    float D = GGXDistribution(H, N, roughness);
+    float G = GeometrySmith(N, V, L, roughness);
+    vec3 F = FresnelSchlick(max(dot(H, V), 0.0), albedo);
+
+    vec3 num = D * G * F;
+    float denom = max(4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0), EPSILON);
+    
+    vec3 specular = num / denom;
+
+    vec3 ks = F;
+    vec3 kd = vec3(1.0) - ks;
+    kd *= 1.0 - metalness;
+
+    float NdotL = max(dot(N, L), 0.0);
+
+    float dist = length(lightPosition - hitPosition);
+    float attenuation = 1.0 / (dist * dist);
+    vec3 radiance = lightColor * lightPower * attenuation;
+
+    vec3 Lo = (kd * albedo / M_PI + specular) * radiance * NdotL;
+
+    return Lo;
+}
+
 void main()
 {
-    // Check if the first path hits a light directly.
-    if (payload.rayDepth == 0 && 
-        (gl_PrimitiveID == 44 || gl_PrimitiveID == 45 || gl_PrimitiveID == 54 || gl_PrimitiveID == 55 || gl_PrimitiveID == 68 || gl_PrimitiveID == 69))
+    // ---------------------- Check if the first path hits a light directly -----------------------
+    if (payload.rayDepth == 0 && ((gl_PrimitiveID >= 74 && gl_PrimitiveID <= 79) || (gl_PrimitiveID >= 94 && gl_PrimitiveID <= 105)))
     {
         payload.directColor = vec3(1.0);
         payload.rayActive = 0;
         return;
     }
 
+    // -------------------- Get hit position in world coordinates and uv data ---------------------
     // Get all the indices of the hit triangle.
     ivec3 primitiveIndices = ivec3(indexBuffer.data[3 * gl_PrimitiveID + 0],
                                    indexBuffer.data[3 * gl_PrimitiveID + 1],
@@ -313,9 +386,6 @@ void main()
     // Calculate the hit position in local space.
     vec3 hitPosition = primitiveVertexA * barycentricHitCoord.x + primitiveVertexB * barycentricHitCoord.y + primitiveVertexC * barycentricHitCoord.z;
 
-    // Calculate the normal of this triangle.
-    vec3 N = normalize(cross(primitiveVertexB - primitiveVertexA, primitiveVertexC - primitiveVertexA));
-
     // Get the UV coordinates of all this triangle's vertices.
     vec2 uvA = vec2(vertexBuffer.data[8 * primitiveIndices.x + 6], vertexBuffer.data[8 * primitiveIndices.x + 7]);
     vec2 uvB = vec2(vertexBuffer.data[8 * primitiveIndices.y + 6], vertexBuffer.data[8 * primitiveIndices.y + 7]);
@@ -324,6 +394,10 @@ void main()
     // Calculate the UV coordinates of the hit position using the barycentric position.
     vec2 uv = uvA * barycentricHitCoord.x + uvB * barycentricHitCoord.y + uvC * barycentricHitCoord.z;
 
+    // ------------------------ Calculate normal and sample albedo texture ------------------------
+    // Calculate the normal of this triangle.
+    vec3 N = normalize(cross(primitiveVertexB - primitiveVertexA, primitiveVertexC - primitiveVertexA));
+
     // Sample texture.
     uint idx = materialIndexBuffer.data[gl_PrimitiveID];
     vec3 albedo = vec3(texture(texSampler[idx], uv));
@@ -331,86 +405,200 @@ void main()
     // Adjust light accumulation based on color of material hit.
     payload.accumulation *= albedo;
 
-    float lightIntensity = 1.0 / (payload.rayDepth + 1.0);
-
-    vec3 lightColor = vec3(1.0);
+    // ----------------------------------- Generate light data ------------------------------------
+    // TODO this should be done by CPU and passed as uniform to shader in the future.
+    Light lights[18];
+    int lightCount = 18;
+    for (int i = 0; i < lightCount; i++)
+    {
+        if (i < 6)
+        {
+            lights[i].color = vec3(1.0, 1.0, 1.0);
+            lights[i].power = 100.0;
+            lights[i].primitiveID = i + 74;
+        }
+        else
+        {
+            lights[i].color = vec3(1.0, 1.0, 1.0);
+            lights[i].power = 100.0;
+            lights[i].primitiveID = i + 88;
+        }
+    }
 
     // Create a random seed.
-    float r1 = rand(vec2(sin(float(camera.frameCount)), cos(gl_LaunchIDEXT.x)));
-    float r2 = rand(vec2(sin(hitPosition.z * gl_LaunchIDEXT.y), cos(uv.y * camera.frameCount)));
+    float r1 = rand(vec2(float(camera.frameCount) + albedo.x * uvA.x, gl_LaunchIDEXT.x + albedo.z * uvB.y));
+    float r2 = rand(vec2(hitPosition.z + gl_LaunchIDEXT.y, uv.y + camera.frameCount));
     vec2 seed = vec2(r1, r2);
 
-    vec3 randomLightPosition44 = GetRandomPositionOnLight(44, seed);
-    float length44 = 1.0 / distance(hitPosition, randomLightPosition44);
-
-    vec3 randomLightPosition45 = GetRandomPositionOnLight(45, seed);
-    float length45 = 1.0 / distance(hitPosition, randomLightPosition45);
-
-    vec3 randomLightPosition54 = GetRandomPositionOnLight(54, seed);
-    float length54 = 1.0 / distance(hitPosition, randomLightPosition54);
-
-    vec3 randomLightPosition55 = GetRandomPositionOnLight(55, seed);
-    float length55 = 1.0 / distance(hitPosition, randomLightPosition55);
-
-    vec3 randomLightPosition68 = GetRandomPositionOnLight(68, seed);
-    float length68 = 1.0 / distance(hitPosition, randomLightPosition68);
-
-    vec3 randomLightPosition69 = GetRandomPositionOnLight(69, seed);
-    float length69 = 1.0 / distance(hitPosition, randomLightPosition69);
-
-    float lengthSum = length44 + length45 + length54 + length55 + length68 + length69;
-
-    length44 /= lengthSum;
-    length45 /= lengthSum;
-    length54 /= lengthSum;
-    length55 /= lengthSum;
-    length68 /= lengthSum;
-    length69 /= lengthSum;
-
-    // Get a random position on the light source.
-    float p = rand(seed);
-    seed = vec2(sin(p * camera.frameCount), cos(p + r2));
-
+    // Initialize light data.
     vec3 randomLightPosition = vec3(0.0);
-    if (p < length44)
+    vec3 lightColor = vec3(0.0);
+    float lightPower = 0.0;
+
+    // ------------------------- ALGORITHM 5: Generate initial candidates -------------------------
+    // Populate this frame's reservoir data.
+    Reservoir reservoir = { 0.0, 0.0, 0.0, 0.0 };
+    for (int i = 0; i < min(lightCount, 2); i++)
     {
-        randomLightPosition = randomLightPosition44;
+        // Uniformly sample a random emitting triangle in the scene.
+        int lightToSample = int(rand(seed) * float(lightCount - 1));
+        randomLightPosition = GetRandomPositionOnLight(lights[lightToSample].primitiveID, seed);
+        lightColor = lights[lightToSample].color;
+        lightPower = lights[lightToSample].power;
+
+        // Uniform probability of selecting any individual light.
+        float p = 1.0 / float(lightCount); 
+
+        // w of the light is f * Le * G / pdf
+        vec3 brdfValue = CookTorranceBRDF(randomLightPosition, lightColor, lightPower, N, hitPosition, camera.position.xyz, 0.5, 0.04, albedo);
+        float w = length(brdfValue) / p; // phat / p
+
+        // Update the reservoir.
+        UpdateReservoir(reservoir, float(lightToSample), w, rand(seed));
+
+        // Update random seed for next light.
+        seed = vec2(i + 1 + brdfValue.x * randomLightPosition.z, i + brdfValue.z * randomLightPosition.x);
     }
-    else if (p < length44 + length45)
+
+    // ----------------- ALGORITHM 5: Evaluate visibility for initial candidates ------------------
+    
+    // Sample the final light saved to reservoir from above step.
+    int lightToSample = int(reservoir.y);
+    Light light = lights[lightToSample];
+    randomLightPosition = GetRandomPositionOnLight(lights[lightToSample].primitiveID, seed);
+
+    // Update random seed after use.
+    seed = vec2(seed.y * 7.0 + randomLightPosition.x, seed.x * 11.0 + randomLightPosition.x);
+
+    // Visibility testing.
+    bool isShadow = CastShadowRay(hitPosition, randomLightPosition);
+    if (isShadow)
     {
-        randomLightPosition = randomLightPosition45;
+        reservoir.w = 0.0;
     }
-    else if (p < length44 + length45 + length54)
+
+    // ------------------------------- ALGORITHM 5: Temporal reuse --------------------------------
+    // TODO pick temporal neighbour pixel.
+    // For now, we only perform temporal reuse if the camera has not moved (i.e. previous pixel == current pixel)
+    // for simplicity.
+    uint reservoirIndex = gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x;
+    Reservoir previousReservoir = reservoirs.data[reservoirIndex];
+
+    // Combine reservoirs (current frame and previous frame) into new reservoir.
+    Reservoir temporalReservoir = { 0.0, 0.0, 0.0, 0.0};
+    vec3 brdfValue = vec3(0.0);
+    float pHat = 0.0;
+
+    // Current frame's reservoir.
+    brdfValue = CookTorranceBRDF(randomLightPosition, light.color, light.power, N, hitPosition, camera.position.xyz, 0.5, 0.04, albedo);
+    pHat = length(brdfValue);
+
+    // Add current frame to new reservoir.
+    UpdateReservoir(temporalReservoir, reservoir.y, pHat * reservoir.w * reservoir.m, -0.1); //rand(seed));
+
+    // Update random seed after use.
+    seed = vec2(seed.x + reservoir.w, seed.y + reservoir.wsum);
+
+    // Previous frame's reservoir.
+    lightToSample = int(previousReservoir.y);
+    light = lights[lightToSample];
+    randomLightPosition = GetRandomPositionOnLight(lights[lightToSample].primitiveID, seed);
+
+    // Update random seed after use.
+    seed = vec2(seed.y * 2.0 + randomLightPosition.x, seed.x * 3.0 + randomLightPosition.z);
+
+    // Add previous frame to new reservoir.
+    brdfValue = CookTorranceBRDF(randomLightPosition, light.color, light.power, N, hitPosition, camera.position.xyz, 0.5, 0.04, albedo);
+    pHat = length(brdfValue);
+    UpdateReservoir(temporalReservoir, previousReservoir.y, pHat * previousReservoir.w * previousReservoir.m, rand(seed));
+
+    // Update random seed after use.
+    seed = vec2(seed.x * seed.y + 1.0, seed.x + 5.0 + temporalReservoir.w);
+
+    // Update the number of samples seen by the new reservoir (current frame + previous frame).
+	temporalReservoir.m = reservoir.m + previousReservoir.m;
+
+    // Sample the output light from the new reservoir.
+    lightToSample = int(temporalReservoir.y);
+    light = lights[lightToSample];
+    randomLightPosition = GetRandomPositionOnLight(lights[lightToSample].primitiveID, seed);
+
+    // Update random seed after use.
+    seed = vec2(seed.x + randomLightPosition.x * randomLightPosition.y, seed.y + seed.x * randomLightPosition.z);
+
+    // Calculate a new weight for the new reservoir's output sample.
+    brdfValue = CookTorranceBRDF(randomLightPosition, light.color, light.power, N, hitPosition, camera.position.xyz, 0.5, 0.04, albedo);
+    pHat = length(brdfValue);
+	temporalReservoir.w = (1.0 / max(pHat, EPSILON)) * (temporalReservoir.wsum / max(temporalReservoir.m, EPSILON));
+
+    // -------------------------------- ALGORITHM 5: Spatial reuse --------------------------------
+
+    Reservoir spatialReservoir = { 0.0, 0.0, 0.0, 0.0 };
+
+    int numNeighbours = 5;
+    float sampleRadius = 5.0;
+
+    for (int i = 0; i < numNeighbours; i++)
     {
-        randomLightPosition = randomLightPosition54;
+        float radius = sampleRadius * rand(seed);
+        float angle = 2.0 * M_PI * rand(seed);
+
+        vec2 neighbourIndex = vec2(gl_LaunchIDEXT.xy);
+
+        neighbourIndex.x += radius * cos(angle);
+        neighbourIndex.y += radius * sin(angle);
+
+        ivec2 neighbour = ivec2(neighbourIndex);
+
+        if (neighbour.x < 0 || neighbour.x >= gl_LaunchSizeEXT.x || neighbour.y < 0 || neighbour.y <= gl_LaunchSizeEXT.y)
+        {
+            continue;
+        }
+
+        // TODO check for large difference in normals between neioghbours.
+        // TODO check for large difference in depth between neighbours.
+
+        spatialReservoir = reservoirs.data[neighbour.y * gl_LaunchSizeEXT.x + neighbour.x];
+
+        // Combine the neighbour reservoir with the current reservoir.
+        lightToSample = int(spatialReservoir.y);
+        light = lights[lightToSample];
+        randomLightPosition = GetRandomPositionOnLight(lights[lightToSample].primitiveID, seed);
+
+        brdfValue = CookTorranceBRDF(randomLightPosition, light.color, light.power, N, hitPosition, camera.position.xyz, 0.5, 0.04, albedo);
+        pHat = length(brdfValue);
+
+        UpdateReservoir(temporalReservoir, spatialReservoir.y, pHat * spatialReservoir.w * spatialReservoir.m, rand(seed));
+        temporalReservoir.m = reservoir.m + spatialReservoir.m;
+        temporalReservoir.w = (1.0 / max(pHat, EPSILON)) * (temporalReservoir.wsum / max(temporalReservoir.m, EPSILON));
     }
-    else if (p < length44 + length45 + length54 + length55)
+
+    // --------------------------------- ALGORITHM 5: Shade pixel ---------------------------------
+
+    lightToSample = int(temporalReservoir.y);
+    light = lights[lightToSample];
+    randomLightPosition = GetRandomPositionOnLight(lights[lightToSample].primitiveID, seed);
+
+    brdfValue = CookTorranceBRDF(randomLightPosition, light.color, light.power, N, hitPosition, camera.position.xyz, 0.5, 0.04, albedo);
+    pHat = length(brdfValue);
+
+    if (pHat == 0.0)
     {
-        randomLightPosition = randomLightPosition55;
-    }
-    else if (p < length44 + length45 + length54 + length55 + length68)
-    {
-        randomLightPosition = randomLightPosition68;
+        temporalReservoir.w = 0.0;
     }
     else
     {
-        randomLightPosition = randomLightPosition69;
-    }
-    seed = vec2(sin(p * randomLightPosition.z), sin(randomLightPosition.x * p));
-
-    // Test if the hit position is visible by the light source.
-    bool isShadow = CastShadowRay(hitPosition, randomLightPosition);
-    if (!isShadow)
-    {
-        //payload.directColor += payload.accumulation * lightColor; // * lightIntensity;
-        payload.directColor = PBRRaytrace(randomLightPosition, lightColor, N, hitPosition, camera.position.xyz, 0.5, 0.25, albedo);
+        temporalReservoir.w = (1.0 / max(pHat, EPSILON)) * (temporalReservoir.wsum / max(temporalReservoir.m, EPSILON));
     }
 
-    // Reflect the ray in a new direction.
-    ApplyBRDF(primitiveIndices, hitPosition, N, seed);
+    payload.directColor += brdfValue * payload.accumulation;// * (temporalReservoir.w + 0.1);
 
-    // Increment path depth.
+    // --------------------------- ALGORITHM 5: Update reservoir buffer ---------------------------
+
+    // Update this pixel's reservoir for the next frame.
+    reservoirs.data[reservoirIndex] = temporalReservoir;
+
+    // ---------------------- Increment ray depth and return to rgen shader -----------------------
     payload.rayDepth += 1;
-
     return;
 }

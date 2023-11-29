@@ -40,12 +40,22 @@ void main()
     float r1 = pixelCoord.x + camera.frameCount;
     float r2 = pixelCoord.y + sin(float(camera.frameCount));
     vec2 seed = vec2(r1, r2);
-    
+
     vec3 radiance = vec3(0.0);
 
     // Min and max of potential ray intersections.
     float tMin = 0.001;
     float tMax = 10000.0;
+
+    // Reset this pixel's reservoir data if the camera is moved.
+    if (camera.frameCount == 0)
+    {
+        uint reservoirIndex = pixelCoord.y * gl_LaunchSizeEXT.x + pixelCoord.x;
+        reservoirBuffer.data[reservoirIndex].y = 0.0;
+        reservoirBuffer.data[reservoirIndex].wsum = 0.0;
+        reservoirBuffer.data[reservoirIndex].m = 0.0;
+        reservoirBuffer.data[reservoirIndex].w = 0.0;
+    }
 
     // Iterate multiple samples per pixel?
     uint sampleCount = 1;
@@ -53,7 +63,7 @@ void main()
     {
         // Create random offset coords.
         float dx = rand(seed) * 2.0 - 1.0;
-        float dy = rand(vec2(sampleCount, rand(seed))) * 2.0 - 1.0;
+        float dy = rand(vec2(seed.y + dx, seed.x + 11.7)) * 2.0 - 1.0;
 
         // Compute floating-point pixel coordinates of the current pixel being rendered with a random offset.
         vec2 uv = vec2(pixelCoord.x + dx, pixelCoord.y + dy);
@@ -104,30 +114,42 @@ void main()
             }
         }
 
-        radiance += (payload.directColor + payload.indirectColor);
+        // Sum the direct and indirect lighting effects.
+        radiance += payload.directColor; // + payload.indirectColor);
 
-        radiance.x = clamp(radiance.x, 0.0, 1.0);
-        radiance.y = clamp(radiance.y, 0.0, 1.0);
-        radiance.z = clamp(radiance.z, 0.0, 1.0);
+        // Clamp values between [0.0, 1.0].
+        //radiance.x = clamp(radiance.x, 0.0, 1.0);
+        //radiance.y = clamp(radiance.y, 0.0, 1.0);
+        //radiance.z = clamp(radiance.z, 0.0, 1.0);
 
-        seed = vec2(rand(vec2(dy + sin(uv.x), dx + cos(float(camera.frameCount)))));
+        // Update random seed for next sample.
+        seed = vec2(dy + uv.x, dx + camera.frameCount);
     }
 
+    // Average radiance over all samples per pixel.
     radiance /= sampleCount;
 
+    // HDR.
+    radiance = radiance / (radiance + vec3(1.0));
+    
+    // Gamma correction.
+    radiance = pow(radiance, vec3(1.0 / 2.2));
+    
+    // Convert to RGBA for final image ouput.
     vec4 color = vec4(radiance, 1.0);
 
-    //vec4 color = vec4(payload.directColor, 1.0);
-    
-    // Temporal sampling of pixel color data.
-    //if (camera.frameCount > 0)
-    //{
-    //    vec4 previousColor = imageLoad(image, ivec2(gl_LaunchIDEXT.xy));
-    //    previousColor *= camera.frameCount;
+    // Monte Carlo integration.
+    if (false)
+    {
+        if (camera.frameCount > 0)
+        {
+            vec4 previousColor = imageLoad(image, ivec2(gl_LaunchIDEXT.xy));
+            previousColor *= camera.frameCount;
 
-    //    color += previousColor;
-    //    color /= (camera.frameCount + 1);
-    //}
+            color += previousColor;
+            color /= (camera.frameCount + 1);
+        }
+    }
 
     // Finally, write the resulting payload into the output image for rendering.
     imageStore(image,                    // Handle to final image output.
