@@ -18,28 +18,28 @@
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="imgui.cpp">
+    <ClCompile Include="inc\imgui.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="imgui_demo.cpp">
+    <ClCompile Include="inc\imgui_demo.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="imgui_draw.cpp">
+    <ClCompile Include="inc\imgui_draw.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="imgui_widgets.cpp">
+    <ClCompile Include="inc\imgui_widgets.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="imgui_impl_vulkan.cpp">
+    <ClCompile Include="inc\imgui_impl_vulkan.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="imgui_impl_glfw.cpp">
+    <ClCompile Include="inc\imgui_impl_glfw.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="imgui_stdlib.cpp">
+    <ClCompile Include="inc\imgui_stdlib.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="imgui_tables.cpp">
+    <ClCompile Include="inc\imgui_tables.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Timer.cpp">
@@ -65,31 +65,31 @@
     <ClInclude Include="inc\tiny_gltf.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="imconfig.h">
+    <ClInclude Include="inc\imconfig.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="imgui.h">
+    <ClInclude Include="inc\imgui.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="imgui_internal.h">
+    <ClInclude Include="inc\imgui_internal.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="imstb_rectpack.h">
+    <ClInclude Include="inc\imstb_rectpack.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="imstb_textedit.h">
+    <ClInclude Include="inc\imstb_textedit.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="imstb_truetype.h">
+    <ClInclude Include="inc\imstb_truetype.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="imgui_impl_vulkan.h">
+    <ClInclude Include="inc\imgui_impl_vulkan.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="imgui_impl_glfw.h">
+    <ClInclude Include="inc\imgui_impl_glfw.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="imgui_stdlib.h">
+    <ClInclude Include="inc\imgui_stdlib.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Timer.h">
@@ -112,7 +112,7 @@
     <None Include="res\shaders\raytrace.rmiss" />
     <None Include="res\shaders\raytrace_shadow.rmiss" />
     <None Include="res\shaders\raycommon.glsl" />
-    <None Include="imgui.natstepfilter" />
+    <None Include="inc\imgui.natstepfilter" />
     <None Include="res\shaders\raytrace.glsl" />
     <None Include="res\shaders\raytrace2.rchit" />
     <None Include="res\shaders\raytrace3.rchit" />
@@ -124,7 +124,7 @@
     </Image>
   </ItemGroup>
   <ItemGroup>
-    <Natvis Include="imgui.natvis" />
+    <Natvis Include="inc\imgui.natvis" />
   </ItemGroup>
   <ItemGroup>
     <Library Include="lib\glfw3.lib" />

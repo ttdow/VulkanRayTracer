@@ -1,5 +1,5 @@
 #define M_PI 3.1415926535897932384626433832795
-#define EPSILON 0.00001
+#define EPSILON 0.000001
 #define RESERVOIR_SIZE 1
 
 struct Payload
@@ -47,7 +47,7 @@ float rand(vec2 st)
 // x = the new light sample.
 // w = the weight of the new sample.
 // rndnum = random float value in the range [0.0, 1.0].
-void UpdateReservoir(inout Reservoir r, float x, float w, float rndnum)
+void UpdateReservoir(inout Reservoir r, float y, float w, float rndnum)
 {
 	// Add new sample weight to sum of all sample weights.
 	r.wsum += w;
@@ -61,14 +61,21 @@ void UpdateReservoir(inout Reservoir r, float x, float w, float rndnum)
 	if (rndnum < (w / max(r.wsum, EPSILON)))
 	{
 		// Update output sample number.
-		r.y = x;
+		r.y = y;
 	}
+}
+
+void MergeReservoirs(inout Reservoir r1, float pHat1, Reservoir r2, float pHat2, vec2 seed)
+{
+	float m0 = r2.m;
+	UpdateReservoir(r1, r2.y, pHat2 * r2.w * r2.m, rand(seed + 7.235711));
+	r1.m += m0;
 }
 
 // Combine two reservoirs into 1 new reservoir.
 Reservoir CombineReservoir(Reservoir r1, float pHat1, Reservoir r2, float pHat2, vec2 seed)
 {
-	Reservoir newReservoir;
+	Reservoir newReservoir = { 0.0, 0.0, 0.0, 0.0} ;
 
 	// Add the 2 old reservoirs to the new reservoir.
 	UpdateReservoir(newReservoir, r1.y, pHat1 * r1.w * r1.m, rand(seed + r2.w + 7.11));

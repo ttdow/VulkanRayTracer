@@ -98,8 +98,8 @@ bool AudioSystem::Load(std::string fileName)
 	}
 
 	// Print the WAV header data for debugging.
-	std::cout << "Filename: " << fileName << std::endl;
-	header.summary();
+	//std::cout << "Filename: " << fileName << std::endl;
+	//header.summary();
 
 	// Copy relevant header data to AudioClip.
 	uint32_t frequency = header.frequency;
@@ -135,10 +135,10 @@ bool AudioSystem::Load(std::string fileName)
 		return false;
 	}
 
-	std::cout << "header.dataSize = " << header.dataSize << std::endl;
-	std::cout << "header.frequency = " << header.frequency << std::endl;
-	std::cout << "Duration: " << static_cast<float>(((header.dataSize / 4) / header.frequency) / 60.0f) << std::endl;
-	std::cout << "sizeof(char) = " << sizeof(char) << std::endl;
+	//std::cout << "header.dataSize = " << header.dataSize << std::endl;
+	//std::cout << "header.frequency = " << header.frequency << std::endl;
+	//std::cout << "Duration: " << static_cast<float>(((header.dataSize / 4) / header.frequency) / 60.0f) << std::endl;
+	//std::cout << "sizeof(char) = " << sizeof(char) << std::endl;
 
 	this->testData = new uint16_t[header.dataSize / 2];
 	//std::memset(test, 0, header.dataSize / 2);

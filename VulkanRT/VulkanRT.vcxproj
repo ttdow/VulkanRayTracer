@@ -160,29 +160,29 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="AudioSystem.cpp" />
-    <ClCompile Include="imgui.cpp" />
-    <ClCompile Include="imgui_demo.cpp" />
-    <ClCompile Include="imgui_draw.cpp" />
-    <ClCompile Include="imgui_impl_glfw.cpp" />
-    <ClCompile Include="imgui_impl_vulkan.cpp" />
-    <ClCompile Include="imgui_stdlib.cpp" />
-    <ClCompile Include="imgui_tables.cpp" />
-    <ClCompile Include="imgui_widgets.cpp" />
+    <ClCompile Include="inc\imgui.cpp" />
+    <ClCompile Include="inc\imgui_demo.cpp" />
+    <ClCompile Include="inc\imgui_draw.cpp" />
+    <ClCompile Include="inc\imgui_impl_glfw.cpp" />
+    <ClCompile Include="inc\imgui_impl_vulkan.cpp" />
+    <ClCompile Include="inc\imgui_stdlib.cpp" />
+    <ClCompile Include="inc\imgui_tables.cpp" />
+    <ClCompile Include="inc\imgui_widgets.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Timer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AudioClip.h" />
     <ClInclude Include="AudioSystem.h" />
-    <ClInclude Include="imconfig.h" />
-    <ClInclude Include="imgui.h" />
-    <ClInclude Include="imgui_impl_glfw.h" />
-    <ClInclude Include="imgui_impl_vulkan.h" />
-    <ClInclude Include="imgui_internal.h" />
-    <ClInclude Include="imgui_stdlib.h" />
-    <ClInclude Include="imstb_rectpack.h" />
-    <ClInclude Include="imstb_textedit.h" />
-    <ClInclude Include="imstb_truetype.h" />
+    <ClInclude Include="inc\imconfig.h" />
+    <ClInclude Include="inc\imgui.h" />
+    <ClInclude Include="inc\imgui_impl_glfw.h" />
+    <ClInclude Include="inc\imgui_impl_vulkan.h" />
+    <ClInclude Include="inc\imgui_internal.h" />
+    <ClInclude Include="inc\imgui_stdlib.h" />
+    <ClInclude Include="inc\imstb_rectpack.h" />
+    <ClInclude Include="inc\imstb_textedit.h" />
+    <ClInclude Include="inc\imstb_truetype.h" />
     <ClInclude Include="inc\json.hpp" />
     <ClInclude Include="inc\stb_image.h" />
     <ClInclude Include="inc\stb_image_write.h" />
@@ -191,7 +191,7 @@
     <ClInclude Include="tiny_obj_loader.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="imgui.natstepfilter" />
+    <None Include="inc\imgui.natstepfilter" />
     <None Include="res\shaders\raycommon.glsl" />
     <None Include="res\shaders\raytrace.rchit" />
     <None Include="res\shaders\raytrace.rgen" />
@@ -210,7 +210,7 @@
     <Image Include="res\textures\texture.jpg" />
   </ItemGroup>
   <ItemGroup>
-    <Natvis Include="imgui.natvis" />
+    <Natvis Include="inc\imgui.natvis" />
   </ItemGroup>
   <ItemGroup>
     <Library Include="lib\glfw3.lib" />

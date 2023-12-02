@@ -61,16 +61,13 @@ struct Reservoir
 
 struct Vertex
 {
-	glm::vec3 pos;			// 0,  1,  2
-	glm::vec3 normal;		// 5,  6,  7
-	glm::vec2 texCoord;		// 3,  4
-	//glm::vec3 tangent;		// 8,  9,  10
-	//glm::vec3 bitangent;	// 11, 12, 13
+	glm::vec3 pos;		
+	glm::vec3 normal;
+	glm::vec2 texCoord;
 
 	bool operator==(const Vertex& other) const
 	{
 		return (pos == other.pos && texCoord == other.texCoord && normal == other.normal);
-			//&& tangent == other.tangent && bitangent == other.bitangent);
 	}
 };
 
@@ -358,7 +355,7 @@ void CreateTextureImage(std::string filePath, VkPhysicalDevice& physicalDevice, 
 
 	std::string file = "res/bistro/" + filePath; //"res/box/" + filePath; //"res/sponza/" + filePath;
 
-	std::cout << "Loading texture: " << file << std::endl;
+	//std::cout << "Loading texture: " << file << std::endl;
 
 	stbi_uc* pixels = stbi_load(file.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 
@@ -486,7 +483,7 @@ void LoadModel(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, st
 	tinyobj::ObjReaderConfig objReaderConfig;
 	tinyobj::ObjReader objReader;
 
-	if (!objReader.ParseFromFile(/*"res/box/cornellbox.obj""res/box/GIBox.obj"*/"res/bistro/bistro_exterior.obj", objReaderConfig))
+	if (!objReader.ParseFromFile(/*"res/box/cornellbox.obj""res/box/GIBox.obj"*/"res/bistro/bistro_exterior(edit).obj", objReaderConfig))
 	{
 		if (!objReader.Error().empty())
 		{
@@ -505,25 +502,13 @@ void LoadModel(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, st
 	shapes = objReader.GetShapes();
 	materials = objReader.GetMaterials();
 
-	/*
-	std::vector<unsigned int> noodleBowlIndices;
-	std::vector<unsigned int> catIndices;
-	std::vector<unsigned int> noodlesIndices;
-	std::vector<unsigned int> dragonIndices;
-	std::vector<unsigned int> womanIndices;
-	std::vector<unsigned int> openIndices;
-	std::vector<unsigned int> sphereIndices;
-	std::vector<unsigned int> lamp01Indices;
-	std::vector<unsigned int> lampGlass01Indices;
-	*/
-
-	std::vector<unsigned int> ceiling;
-
 	std::unordered_map<Vertex, uint32_t> uniqueVertices{};
 
 	for (const auto& shape : shapes)
 	{
 		primitiveCount += shape.mesh.num_face_vertices.size();
+
+		std::cout << shape.name << std::endl;
 
 		for (const auto& index : shape.mesh.indices)
 		{
@@ -547,67 +532,10 @@ void LoadModel(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, st
 			}
 
 			indices.push_back(uniqueVertices[vertex]);
-			
-			if (shape.name == "Bistro_Research_Exterior_paris_Bistroawning_4095")
-			{
-				ceiling.push_back(indices.back());
-			}
-			
-			/*
-			if (shape.name == "cat")
-			{
-				catIndices.push_back(indices.back());
-			}
-			else if (shape.name == "dragon")
-			{
-				dragonIndices.push_back(indices.back());
-			}
-			else if (shape.name == "noodle_bowl")
-			{
-				noodleBowlIndices.push_back(indices.back());
-			}
-			else if (shape.name == "noodles")
-			{
-				noodlesIndices.push_back(indices.back());
-			}
-			else if (shape.name == "open")
-			{
-				openIndices.push_back(indices.back());
-			}
-			else if (shape.name == "sphere")
-			{
-				sphereIndices.push_back(indices.back());
-			}
-			else if (shape.name == "woman")
-			{
-				womanIndices.push_back(indices.back());
-			}
-			else if (shape.name == "lamp_light_01")
-			{
-				lamp01Indices.push_back(indices.back());
-			}
-			else if (shape.name == "lamp_glass_01")
-			{
-				lampGlass01Indices.push_back(indices.back());
-			}
-			*/
 		}
 	}
 
-	// Print min/max index for each light.
-	/*
-	PrintDetails(catIndices, "cat");
-	PrintDetails(dragonIndices, "dragon");
-	PrintDetails(noodleBowlIndices, "noodle bowl");
-	PrintDetails(noodlesIndices, "noodles");
-	PrintDetails(openIndices, "open");
-	PrintDetails(sphereIndices, "sphere");
-	PrintDetails(womanIndices, "woman");
-	PrintDetails(lamp01Indices, "lamp01");
-	PrintDetails(lampGlass01Indices, "lampGlass01");
-	*/
-
-	PrintDetails(ceiling, "Ceiling");
+	//PrintDetails(ceiling, "Ceiling");
 }
 
 class App
@@ -745,8 +673,8 @@ int main()
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 	GLFWmonitor* monitor = glfwGetPrimaryMonitor();
 	const GLFWvidmode* mode = glfwGetVideoMode(monitor);
-	unsigned int windowWidth = 1920; // mode->width;
-	unsigned int windowHeight = 1080; // mode->height;
+	unsigned int windowWidth = 1920;// mode->width;
+	unsigned int windowHeight = 1080;// mode->height;
 	std::cout << windowWidth << "x" << windowHeight << std::endl;
 	GLFWwindow* pWindow = glfwCreateWindow(windowWidth, windowHeight, "Vulkan Ray Tracing", nullptr /*monitor*/, nullptr);
 	glfwSetInputMode(pWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
@@ -856,8 +784,6 @@ int main()
 	VkPhysicalDeviceProperties physicalDeviceProperties;
 	vkGetPhysicalDeviceProperties(activePhysicalDeviceHandle, &physicalDeviceProperties);
 
-	std::cout << "Physical device: " << physicalDeviceProperties.deviceName << std::endl;
-
 	VkPhysicalDeviceRayTracingPipelinePropertiesKHR physicalDeviceRayTracingPipelineProperties{};
 	physicalDeviceRayTracingPipelineProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
 	physicalDeviceRayTracingPipelineProperties.pNext = NULL;
@@ -872,11 +798,11 @@ int main()
 	VkPhysicalDeviceMemoryProperties physicalDeviceMemoryProperties;
 	vkGetPhysicalDeviceMemoryProperties(activePhysicalDeviceHandle, &physicalDeviceMemoryProperties);
 
-	/*
 	std::cout << "Using physical device: " << physicalDeviceProperties.deviceName << std::endl;
 	std::cout << "  Device memory type count: " << physicalDeviceMemoryProperties.memoryTypeCount << std::endl;
 	std::cout << "  Device memory heap count: " << physicalDeviceMemoryProperties.memoryHeapCount << std::endl;
 
+	/*
 	for (auto memType : physicalDeviceMemoryProperties.memoryTypes)
 	{
 		std::cout << "  Memory type heap index: " << memType.heapIndex << std::endl;
@@ -1251,6 +1177,8 @@ int main()
 	std::cout << "  Primitives: " << primitiveCount << std::endl;
 	std::cout << "  Materials: " << materials.size() << std::endl;
 	std::cout << "  Vertices: " << vertices.size() << std::endl;
+
+	std::cout << "Vertex0: (" << vertices[0].pos.x << ", " << vertices[0].pos.y << ", " << vertices[0].pos.z << ")\n";
 
 	/*
 	for (auto& material : materials)
@@ -2608,40 +2536,9 @@ int main()
 		float cameraUp[4] = { 0, 1, 0, 1 };
 		float cameraForward[4] = { 0, 0, 1, 1 };
 
-		float lightPosition[32][4] = { {  -9.9f, 4.1f, -4.7f, 1 },
-									   {  -5.9f, 4.1f, -4.7f, 1 },
-									   {  -1.9f, 4.1f, -4.7f, 1 },
-									   {   2.1f, 4.1f, -4.7f, 1 },
-									   {   6.1f, 4.1f, -4.7f, 1 },
-									   {  10.1f, 4.1f, -4.7f, 1 },
-									   {  10.0f, 4.1f,  4.8f, 1 },
-									   {   6.0f, 4.1f,  4.8f, 1 },
-									   {   2.2f, 4.1f,  4.8f, 1 },
-									   {  -1.9f, 4.1f,  4.8f, 1 },
-									   {  -5.9f, 4.1f,  4.8f, 1 },
-									   {  -9.8f, 4.1f,  4.8f, 1 },
-									   { -13.2f, 3.7f,  0.2f, 1 },
-									   {  15.6f, 3.2f,	0.9f, 1 },
-									   {  19.5f, 1.5f,  2.8f, 1 },
-									   { -7.6f,  8.6f,  2.5f, 1 },
-									   { 0, 3, 0, 1 },
-									   { 0, 3, 0, 1 },
-									   { 0, 3, 0, 1 },
-									   { 0, 3, 0, 1 },
-									   { 0, 3, 0, 1 },
-									   { 0, 3, 0, 1 },
-									   { 0, 3, 0, 1 },
-									   { 0, 3, 0, 1 },
-									   { 0, 3, 0, 1 },
-									   { 0, 3, 0, 1 },
-									   { 0, 3, 0, 1 },
-									   { 0, 3, 0, 1 },
-									   { 0, 3, 0, 1 },
-									   { 0, 3, 0, 1 },
-									   { 0, 3, 0, 1 },
-									   { 0, 3, 0, 1 },
-		};
-
+		uint32_t counter = 10;
+		uint32_t other = 0;
+		uint32_t mode = 0;
 		uint32_t frameCount = 0;
 	} uniformStructure;
 
@@ -3066,6 +2963,8 @@ int main()
 			materialIndexList.push_back(idx);
 		}
 	}
+
+	std::cout << "Material Index List: " << materialIndexList.size() << std::endl;
 
 	VkBufferCreateInfo materialIndexBufferCreateInfo{};
 	materialIndexBufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -3620,6 +3519,77 @@ int main()
 		{
 			glfwSetWindowShouldClose(pWindow, true);
 		}
+		if (keyDownIndex[GLFW_KEY_M])
+		{
+			uniformStructure.other = 1;
+			uniformStructure.frameCount = 0;
+		}
+		if (keyDownIndex[GLFW_KEY_N])
+		{
+			uniformStructure.other = 0;
+			uniformStructure.frameCount = 0;
+		}
+		if (keyDownIndex[GLFW_KEY_0])
+		{
+			uniformStructure.mode = 0;
+			uniformStructure.frameCount = 0;
+		}
+		if (keyDownIndex[GLFW_KEY_1])
+		{
+			uniformStructure.mode = 1;
+			uniformStructure.frameCount = 0;
+		}
+		if (keyDownIndex[GLFW_KEY_2])
+		{
+			uniformStructure.mode = 2;
+			uniformStructure.frameCount = 0;
+		}
+		if (keyDownIndex[GLFW_KEY_3])
+		{
+			uniformStructure.mode = 3;
+			uniformStructure.frameCount = 0;
+		}
+		if (keyDownIndex[GLFW_KEY_4])
+		{
+			uniformStructure.mode = 4;
+			uniformStructure.frameCount = 0;
+		}
+		if (keyDownIndex[GLFW_KEY_5])
+		{
+			uniformStructure.mode = 5;
+			uniformStructure.frameCount = 0;
+		}
+		if (keyDownIndex[GLFW_KEY_6])
+		{
+			uniformStructure.mode = 6;
+			uniformStructure.frameCount = 0;
+		}
+		if (keyDownIndex[GLFW_KEY_7])
+		{
+			uniformStructure.mode = 7;
+			uniformStructure.frameCount = 0;
+		}
+		if (keyDownIndex[GLFW_KEY_8])
+		{
+			uniformStructure.mode = 8;
+			uniformStructure.frameCount = 0;
+		}
+		if (keyDownIndex[GLFW_KEY_9])
+		{
+			uniformStructure.mode = 9;
+			uniformStructure.frameCount = 0;
+		}
+		if (keyDownIndex[GLFW_KEY_MINUS])
+		{
+			if (uniformStructure.counter > 1)
+			{
+				uniformStructure.counter--;
+			}
+		}
+		if (keyDownIndex[GLFW_KEY_EQUAL])
+		{
+			uniformStructure.counter++;
+		}
 
 		static double previousMousePositionX;
 
@@ -3637,8 +3607,6 @@ int main()
 
 		if (isCameraMoved) 
 		{
-			//std::cout << "(" << cameraPosition[0] << ", " << cameraPosition[1] << ", " << cameraPosition[2] << ")\n";
-
 			uniformStructure.cameraPosition[0] = cameraPosition[0];
 			uniformStructure.cameraPosition[1] = cameraPosition[1];
 			uniformStructure.cameraPosition[2] = cameraPosition[2];
@@ -3658,8 +3626,6 @@ int main()
 			uniformStructure.cameraRight[2] =
 				uniformStructure.cameraForward[0] * uniformStructure.cameraUp[1] -
 				uniformStructure.cameraForward[1] * uniformStructure.cameraUp[0];
-
-			//uniformStructure.lightPosition[0][0] = 5.0 * sin(glfwGetTime());
 
 			uniformStructure.frameCount = 0;
 		}
