@@ -10,6 +10,10 @@ Alternatively, you can open the solution file in Microsoft Visual Studio and bui
 
 The Wavefront OBJ model for this application is located here: https://drive.google.com/drive/folders/1oX_53pTtxt9kcCy0BvGHEn_NE6Nnpm3c?usp=drive_link. Download the zip file and unzip the contents into the ./VulkanRT/res/ directory.
 
+Video demo: https://youtu.be/VTCFcmIccns
+
+Project as a zip file: https://drive.google.com/drive/folders/1E7xNBb7jE-35IulticRyxt8VFSTt2sMO?usp=drive_link
+
 Basic Vulkan ray tracing implementation used:
     https://github.com/WilliamLewww/vulkan_ray_tracing_minimal_abstraction
 
