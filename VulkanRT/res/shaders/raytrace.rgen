@@ -16,7 +16,9 @@ layout(binding = 1, set = 0) uniform Camera
     vec4 right;
     vec4 up;
     vec4 forward;
-
+    
+    uint textureCount;
+    uint useRoughAndMetal;
     uint counter;
     uint other;
     uint mode;
@@ -26,7 +28,7 @@ layout(binding = 1, set = 0) uniform Camera
 // Output image.
 layout(binding = 4, set = 0, rgba32f) uniform image2D image;
 
-layout(binding = 5) uniform sampler2D texSampler[272];
+layout(binding = 5) uniform sampler2D texSampler[];
 
 layout(binding = 6, set = 0) buffer ReservoirBuffer
 {

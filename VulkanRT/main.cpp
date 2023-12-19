@@ -353,9 +353,7 @@ void CreateTextureImage(std::string filePath, VkPhysicalDevice& physicalDevice, 
 {
 	int texWidth, texHeight, texChannels;
 
-	std::string file = "res/bistro/" + filePath; //"res/box/" + filePath; //"res/sponza/" + filePath;
-
-	//std::cout << "Loading texture: " << file << std::endl;
+	std::string file = "res/bistro/" + filePath;
 
 	stbi_uc* pixels = stbi_load(file.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 
@@ -483,7 +481,7 @@ void LoadModel(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, st
 	tinyobj::ObjReaderConfig objReaderConfig;
 	tinyobj::ObjReader objReader;
 
-	if (!objReader.ParseFromFile(/*"res/box/cornellbox.obj""res/box/GIBox.obj"*/"res/bistro/bistro_exterior(edit).obj", objReaderConfig))
+	if (!objReader.ParseFromFile("res/bistro/bistro_exterior(edit).obj", objReaderConfig))
 	{
 		if (!objReader.Error().empty())
 		{
@@ -507,8 +505,6 @@ void LoadModel(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, st
 	for (const auto& shape : shapes)
 	{
 		primitiveCount += shape.mesh.num_face_vertices.size();
-
-		std::cout << shape.name << std::endl;
 
 		for (const auto& index : shape.mesh.indices)
 		{
@@ -538,6 +534,7 @@ void LoadModel(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, st
 	//PrintDetails(ceiling, "Ceiling");
 }
 
+/*
 class App
 {
 public:
@@ -661,27 +658,65 @@ private:
 		glfwTerminate();
 	}
 };
+*/
+
+bool IsDeviceSuitable(VkPhysicalDevice device)
+{
+	VkPhysicalDeviceProperties deviceProperties;
+	vkGetPhysicalDeviceProperties(device, &deviceProperties);
+
+	VkPhysicalDeviceFeatures deviceFeatures;
+	vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+
+	if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+	{
+		return true;
+	}
+
+	return false;
+}
+
+void PickPhysicalDevice()
+{
+
+}
 
 int main()
 {
+	// Used to hold results of various Vulkan API calls for debugging.
 	VkResult result;
 
 	// =========================================================================
-	// GLFW Window
+	// GLFW Window Creation
+	// =========================================================================
+	
+	// Initialize GLFW.
 	glfwInit();
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+
+	// Define monitor to use.
 	GLFWmonitor* monitor = glfwGetPrimaryMonitor();
 	const GLFWvidmode* mode = glfwGetVideoMode(monitor);
-	unsigned int windowWidth = 1920;// mode->width;
-	unsigned int windowHeight = 1080;// mode->height;
+
+	// Hardcoded to 1080p resolution, however, can replace with comment to use device's max resolution.
+	unsigned int windowWidth = 1920; // mode->width;
+	unsigned int windowHeight = 1080; // mode->height;
+
+	// Print the resolution to the terminal.
 	std::cout << windowWidth << "x" << windowHeight << std::endl;
+
+	// Create the window - can replace with commented code to use fullscreen mode.
 	GLFWwindow* pWindow = glfwCreateWindow(windowWidth, windowHeight, "Vulkan Ray Tracing", nullptr /*monitor*/, nullptr);
+
+	// Declare callback functions for input.
 	glfwSetInputMode(pWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 	glfwSetKeyCallback(pWindow, KeyCallback);
 
 	// =========================================================================
-	// Vulkan Instance
+	// Vulkan API Instance
+	// =========================================================================
+	
 	std::vector<VkValidationFeatureEnableEXT> validationFeatureEnableList =
 	{
 		VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT,
@@ -755,6 +790,8 @@ int main()
 
 	// =========================================================================
 	// Window surface
+	// =========================================================================
+
 	VkSurfaceKHR surfaceHandle = VK_NULL_HANDLE;
 	result = glfwCreateWindowSurface(instanceHandle, pWindow, NULL, &surfaceHandle);
 	if (result != VK_SUCCESS)
@@ -763,7 +800,10 @@ int main()
 	}
 
 	// =========================================================================
-	// Physical device
+	// Physical device selection (GPU)
+	// =========================================================================
+
+	// Get a count of all the physical devices.
 	uint32_t physicalDeviceCount = 0;
 	result = vkEnumeratePhysicalDevices(instanceHandle, &physicalDeviceCount, NULL);
 	if (result != VK_SUCCESS)
@@ -771,53 +811,82 @@ int main()
 		throw std::runtime_error("Failed to get physical device count!");
 	}
 
+	// Get a list of all the physical devices.
 	std::vector<VkPhysicalDevice> physicalDeviceHandleList(physicalDeviceCount);
 	result = vkEnumeratePhysicalDevices(instanceHandle, &physicalDeviceCount, physicalDeviceHandleList.data());
 	if (result != VK_SUCCESS)
 	{
-		throw std::runtime_error("Failed to enumerate physical devices!");
+		throw std::runtime_error("Failed to enumerate physical devices (GPUs)!");
 	}
 
-	// TODO replace this with a function that gets the best device.
-	VkPhysicalDevice activePhysicalDeviceHandle = physicalDeviceHandleList[0];
+	// Select the "best" physical device (i.e. a dedicated GPU).
+	VkPhysicalDevice activePhysicalDeviceHandle = nullptr;
+	for (const auto& physicalDeviceHandle : physicalDeviceHandleList)
+	{
+		if (IsDeviceSuitable(physicalDeviceHandle))
+		{
+			activePhysicalDeviceHandle = physicalDeviceHandle;
+			break;
+		}
+	}
 
+	// Check to make sure a suitable physical device was found.
+	if (activePhysicalDeviceHandle == VK_NULL_HANDLE)
+	{
+		throw std::runtime_error("Failed to find a suitable GPU!");
+	}
+
+	// Query the properties of the selected physical device.
 	VkPhysicalDeviceProperties physicalDeviceProperties;
 	vkGetPhysicalDeviceProperties(activePhysicalDeviceHandle, &physicalDeviceProperties);
 
+	// Query ray tracing pipeline properties of the selected physical device.
 	VkPhysicalDeviceRayTracingPipelinePropertiesKHR physicalDeviceRayTracingPipelineProperties{};
 	physicalDeviceRayTracingPipelineProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
 	physicalDeviceRayTracingPipelineProperties.pNext = NULL;
 
+	// Query more ray tracing pipeline properties of the selected physical device.
 	VkPhysicalDeviceProperties2 physicalDeviceProperties2{};
 	physicalDeviceProperties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
 	physicalDeviceProperties2.pNext = &physicalDeviceRayTracingPipelineProperties;
 	physicalDeviceProperties2.properties = physicalDeviceProperties;
-
 	vkGetPhysicalDeviceProperties2(activePhysicalDeviceHandle, &physicalDeviceProperties2);
 
+	// Query memory properties of the selected physical device.
 	VkPhysicalDeviceMemoryProperties physicalDeviceMemoryProperties;
 	vkGetPhysicalDeviceMemoryProperties(activePhysicalDeviceHandle, &physicalDeviceMemoryProperties);
 
+	// Print selected GPU name to console.
 	std::cout << "Using physical device: " << physicalDeviceProperties.deviceName << std::endl;
-	std::cout << "  Device memory type count: " << physicalDeviceMemoryProperties.memoryTypeCount << std::endl;
-	std::cout << "  Device memory heap count: " << physicalDeviceMemoryProperties.memoryHeapCount << std::endl;
 
-	/*
-	for (auto memType : physicalDeviceMemoryProperties.memoryTypes)
+	// Check the amount of VRAM the GPU has to determine if we can use all features.
+	bool useRoughAndMetalMaps = false;
+	for (unsigned int i = 0; i < physicalDeviceMemoryProperties.memoryTypeCount; i++)
 	{
-		std::cout << "  Memory type heap index: " << memType.heapIndex << std::endl;
-		std::cout << "    Memory type property flags: " << memType.propertyFlags << std::endl;
+		VkMemoryType memType = physicalDeviceMemoryProperties.memoryTypes[i];
+		VkMemoryHeap heapType = physicalDeviceMemoryProperties.memoryHeaps[i];
+
+		if (heapType.flags == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+		{
+			std::cout << "VRAM detected: " << (heapType.size / 1024.0 / 1024.0 / 1024.0) << " GB." << std::endl;
+
+			if (heapType.size < 8589934592)
+			{
+				useRoughAndMetalMaps = false;
+				std::cout << "Less than 8GB of VRAM found: Turning off roughness and metalness map loading." << std::endl;
+			}
+			else
+			{
+				useRoughAndMetalMaps = true;
+				std::wcout << "More than 8GB of VRAM found: Turning on roughness and metalness map loading." << std::endl;
+			}
+		}
 	}
 
-	for (auto memHeap : physicalDeviceMemoryProperties.memoryHeaps)
-	{
-		std::cout << "    Memory heap: " << memHeap.flags << std::endl;
-		std::cout << "      Memory heap size: " << memHeap.size << std::endl;
-	}
-	*/
-
+	// =========================================================================
 	// Physical device features
 	// =========================================================================
+	
 	VkPhysicalDeviceBufferDeviceAddressFeatures physicalDeviceBufferDeviceAddressFeatures{};
 	physicalDeviceBufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
 	physicalDeviceBufferDeviceAddressFeatures.pNext = NULL;
@@ -847,8 +916,10 @@ int main()
 	deviceFeatures.geometryShader = VK_TRUE;
 	deviceFeatures.samplerAnisotropy = VK_TRUE;
 
+	// =========================================================================
 	// Physical device submission queue families
 	// =========================================================================
+	
 	uint32_t queueFamilyPropertyCount = 0;
 	vkGetPhysicalDeviceQueueFamilyProperties(activePhysicalDeviceHandle, &queueFamilyPropertyCount, NULL);
 
@@ -885,8 +956,10 @@ int main()
 	deviceQueueCreateInfo.queueCount = 1;
 	deviceQueueCreateInfo.pQueuePriorities = queuePrioritiesList.data();
 
+	// =========================================================================
 	// Logical device
 	// =========================================================================
+	
 	std::vector<const char*> deviceExtensionList =
 	{
 		"VK_KHR_ray_tracing_pipeline",
@@ -917,13 +990,17 @@ int main()
 		throw std::runtime_error("Failed to create logical device!");
 	}
 
+	// =========================================================================
 	// Submission queue
 	// =========================================================================
+	
 	VkQueue queueHandle = VK_NULL_HANDLE;
 	vkGetDeviceQueue(deviceHandle, queueFamilyIndex, 0, &queueHandle);
 
+	// =========================================================================
 	// Device pointer functions
 	// =========================================================================
+	
 	PFN_vkGetBufferDeviceAddressKHR pvkGetBufferDeviceAddressKHR =
 		(PFN_vkGetBufferDeviceAddressKHR)vkGetDeviceProcAddr(
 			deviceHandle, "vkGetBufferDeviceAddressKHR");
@@ -969,8 +1046,10 @@ int main()
 	memoryAllocateFlagsInfo.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
 	memoryAllocateFlagsInfo.deviceMask = 0;
 
+	// =========================================================================
 	// Command pool
 	// =========================================================================
+	
 	VkCommandPoolCreateInfo commandPoolCreateInfo{};
 	commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	commandPoolCreateInfo.pNext = NULL;
@@ -984,8 +1063,10 @@ int main()
 		throw std::runtime_error("Failed to create command pool!");
 	}
 
+	// =========================================================================
 	// Command buffers
 	// =========================================================================
+	
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo{};
 	commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	commandBufferAllocateInfo.pNext = NULL;
@@ -1001,8 +1082,10 @@ int main()
 		throw std::runtime_error("Failed to allocate command buffers!");
 	}
 
+	// =========================================================================
 	// Surface features
 	// =========================================================================
+	
 	VkSurfaceCapabilitiesKHR surfaceCapabilities;
 	result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(activePhysicalDeviceHandle, surfaceHandle, &surfaceCapabilities);
 	if (result != VK_SUCCESS)
@@ -1038,8 +1121,10 @@ int main()
 		throw std::runtime_error("Failed to get physical device surface present modes!");
 	}
 
+	// =========================================================================
 	// Swapchain
 	// =========================================================================
+	
 	VkSwapchainCreateInfoKHR swapchainCreateInfo{};
 	swapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 	swapchainCreateInfo.pNext = NULL;
@@ -1066,9 +1151,11 @@ int main()
 	{
 		throw std::runtime_error("Failed to create swapchain!");
 	}
-
+	
+	// =========================================================================
 	// Swapchain images
 	// =========================================================================
+	
 	uint32_t swapchainImageCount = 0;
 	result = vkGetSwapchainImagesKHR(deviceHandle, swapchainHandle, &swapchainImageCount, NULL);
 	if (result != VK_SUCCESS)
@@ -1113,9 +1200,11 @@ int main()
 			throw std::runtime_error("Failed to create image view!");
 		}
 	}
-
+	
+	// =========================================================================
 	// Descriptor pool
 	// =========================================================================
+	
 	std::vector<VkDescriptorPoolSize> descriptorPoolSizeList;
 
 	VkDescriptorPoolSize descriptorPool{};
@@ -1163,8 +1252,10 @@ int main()
 		throw std::runtime_error("Failed to create descriptor pool!");
 	}
 
-	// OBJ model
 	// =========================================================================
+	// OBJ model loading
+	// =========================================================================
+	
 	std::vector<Vertex> vertices;
 	std::vector<uint32_t> indices;
 	std::set<uint32_t> lampIndices;
@@ -1177,16 +1268,6 @@ int main()
 	std::cout << "  Primitives: " << primitiveCount << std::endl;
 	std::cout << "  Materials: " << materials.size() << std::endl;
 	std::cout << "  Vertices: " << vertices.size() << std::endl;
-
-	std::cout << "Vertex0: (" << vertices[0].pos.x << ", " << vertices[0].pos.y << ", " << vertices[0].pos.z << ")\n";
-
-	/*
-	for (auto& material : materials)
-	{
-		std::cout << material.name << std::endl;
-		std::cout << "\t(" << material.emission[0] << ", " << material.emission[1] << ", " << material.emission[2] << ")" << std::endl;
-	}
-	*/
 
 	// Get list of diffuse textures.
 	std::set<std::string> textureList;
@@ -1210,31 +1291,26 @@ int main()
 
 	// Get list of combined roughness/metalness maps.
 	std::set<std::string> combinedMapList;
-	for (auto& material : materials)
+	if (useRoughAndMetalMaps)
 	{
-		if (!material.roughness_texname.empty())
+		for (auto& material : materials)
 		{
-			combinedMapList.insert(material.roughness_texname);
+			if (!material.ambient_texname.empty())
+			{
+				combinedMapList.insert(material.ambient_texname);
+			}
 		}
 	}
 
-	// Get list of emission maps.
-	std::set<std::string> emissiveMapList;
-	for (auto& material : materials)
-	{
-		if (!material.emissive_texname.empty())
-		{
-			emissiveMapList.insert(material.emissive_texname);
-		}
-	}
-
-	std::cout << "Texture list size: " << textureList.size() << std::endl;
+	// Print texture map sizes to console.
+	std::cout << "Albedo list size: " << textureList.size() << std::endl;
 	std::cout << "Normal map list size: " << normalMapList.size() << std::endl;
 	std::cout << "Rough/Metal map list size: " << combinedMapList.size() << std::endl;
-	std::cout << "Emissive map list size: " << emissiveMapList.size() << std::endl;
 
+	// =========================================================================
 	// Descriptor set layout
 	// =========================================================================
+	
 	std::vector<VkDescriptorSetLayoutBinding> descriptorSetLayoutBindingList;
 	VkDescriptorSetLayoutBinding descriptorSetLayoutBinding{};
 	descriptorSetLayoutBinding.binding = 0;
@@ -1279,7 +1355,7 @@ int main()
 	descriptorSetLayoutBinding = {};
 	descriptorSetLayoutBinding.binding = 5;
 	descriptorSetLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	descriptorSetLayoutBinding.descriptorCount = static_cast<uint32_t>(textureList.size() + normalMapList.size() + combinedMapList.size() + emissiveMapList.size());
+	descriptorSetLayoutBinding.descriptorCount = static_cast<uint32_t>(textureList.size() + normalMapList.size() + combinedMapList.size());
 	descriptorSetLayoutBinding.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
 	descriptorSetLayoutBinding.pImmutableSamplers = NULL;
 	descriptorSetLayoutBindingList.push_back(descriptorSetLayoutBinding);
@@ -1306,8 +1382,10 @@ int main()
 		throw std::runtime_error("Failed to create descriptor set layout!");
 	}
 
+	// =========================================================================
 	// Material descriptor set layout
 	// =========================================================================
+	
 	std::vector<VkDescriptorSetLayoutBinding> materialDescriptorSetLayoutBindingList;
 	VkDescriptorSetLayoutBinding desicriptorSetLayoutBinding{};
 	desicriptorSetLayoutBinding.binding = 0;
@@ -1339,8 +1417,10 @@ int main()
 		throw std::runtime_error("Failed to create descriptor set layout!");
 	}
 
+	// =========================================================================
 	// Allocate descriptor sets
 	// =========================================================================
+	
 	std::vector<VkDescriptorSetLayout> descriptorSetLayoutHandleList =
 	{
 		descriptorSetLayoutHandle,
@@ -1362,8 +1442,10 @@ int main()
 		throw std::runtime_error("Failed to allocate descriptor sets!");
 	}
 
+	// =========================================================================
 	// Pipeline layout
 	// =========================================================================
+	
 	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo{};
 	pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutCreateInfo.pNext = NULL;
@@ -1380,8 +1462,10 @@ int main()
 		throw std::runtime_error("Failed to create pipeline layout!");
 	}
 
+	// =========================================================================
 	// Ray closest hit shader module
 	// =========================================================================
+	
 	std::ifstream rayClosestHitFile("res/shaders/shader.rchit.spv", std::ios::binary | std::ios::ate);
 	std::streamsize rayClosestHitFileSize = rayClosestHitFile.tellg();
 	rayClosestHitFile.seekg(0, std::ios::beg);
@@ -1405,8 +1489,10 @@ int main()
 		throw std::runtime_error("Failed to create closest hit shader module!");
 	}
 
+	// =========================================================================
 	// Ray generation shader module
 	// =========================================================================
+	
 	std::ifstream rayGenerateFile("res/shaders/shader.rgen.spv", std::ios::binary | std::ios::ate);
 	std::streamsize rayGenerateFileSize = rayGenerateFile.tellg();
 	rayGenerateFile.seekg(0, std::ios::beg);
@@ -1430,8 +1516,10 @@ int main()
 		throw std::runtime_error("Failed to create ray generation shader module!");
 	}
 
+	// =========================================================================
 	// Ray miss shader module
 	// =========================================================================
+	
 	std::ifstream rayMissFile("res/shaders/shader.rmiss.spv", std::ios::binary | std::ios::ate);
 	std::streamsize rayMissFileSize = rayMissFile.tellg();
 	rayMissFile.seekg(0, std::ios::beg);
@@ -1455,8 +1543,10 @@ int main()
 		throw std::runtime_error("Failed to create ray miss shader module!");
 	}
 
+	// =========================================================================
 	// Ray miss (shadow) shader module
 	// =========================================================================
+	
 	std::ifstream rayMissShadowFile("res/shaders/shader_shadow.rmiss.spv", std::ios::binary | std::ios::ate);
 	std::streamsize rayMissShadowFileSize = rayMissShadowFile.tellg();
 	rayMissShadowFile.seekg(0, std::ios::beg);
@@ -1480,8 +1570,10 @@ int main()
 		throw std::runtime_error("Failed to create ray miss (shadow) shader module!");
 	}
 
+	// =========================================================================
 	// Ray tracing pipeline
 	// =========================================================================
+	
 	std::vector<VkPipelineShaderStageCreateInfo> pipelineShaderStageCreateInfoList;
 	VkPipelineShaderStageCreateInfo pipelineShaderStageCreateInfo{};
 	pipelineShaderStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -1591,107 +1683,10 @@ int main()
 		throw std::runtime_error("Failed to create ray tracing pipeline!");
 	}
 
-	// ImGUI
 	// =========================================================================
-	/*
-	IMGUI_CHECKVERSION();
-	ImGui::CreateContext();
-	ImGuiIO& io = ImGui::GetIO(); (void)io;
-
-	ImGui::StyleColorsDark();
-
-	VkDescriptorPoolSize imGuiPoolSizes[] =
-	{
-		{ VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
-		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
-		{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
-		{ VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
-		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
-		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
-		{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
-	};
-
-	VkDescriptorPoolCreateInfo imGuiPoolInfo{};
-	imGuiPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-	imGuiPoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-	imGuiPoolInfo.maxSets = static_cast<uint32_t>(11 * 1000);
-	imGuiPoolInfo.pPoolSizes = imGuiPoolSizes;
-
-	VkDescriptorPool imGuiDescriptorPool;
-	vkCreateDescriptorPool(deviceHandle, &imGuiPoolInfo, nullptr, &imGuiDescriptorPool);
-
-	ImGui_ImplGlfw_InitForVulkan(pWindow, true);
-	ImGui_ImplVulkan_InitInfo init_info{};
-	init_info.Instance = instanceHandle;
-	init_info.PhysicalDevice = activePhysicalDeviceHandle;
-	init_info.Device = deviceHandle;
-	init_info.QueueFamily = queueFamilyIndex;
-	init_info.Queue = queueHandle;
-	init_info.PipelineCache = VK_NULL_HANDLE;
-	init_info.DescriptorPool = imGuiDescriptorPool;
-	init_info.MinImageCount = surfaceCapabilities.minImageCount + 1;
-	init_info.ImageCount = swapchainImageCount;
-
-	VkAttachmentDescription attachment{};
-	attachment.format = swapchainCreateInfo.imageFormat;
-	attachment.samples = VK_SAMPLE_COUNT_1_BIT;
-	attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-	attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-	attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	attachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-	VkAttachmentReference colorAttachment{};
-	colorAttachment.attachment = 0;
-	colorAttachment.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-	VkSubpassDescription subpass{};
-	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	subpass.colorAttachmentCount = 1;
-	subpass.pColorAttachments = &colorAttachment;
-
-	VkSubpassDependency dependency{};
-	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-	dependency.dstSubpass = 0;
-	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependency.srcAccessMask = 0;
-	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-	VkRenderPassCreateInfo rpCreateInfo{};
-	rpCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-	rpCreateInfo.attachmentCount = 1;
-	rpCreateInfo.pAttachments = &attachment;
-	rpCreateInfo.subpassCount = 1;
-	rpCreateInfo.pSubpasses = &subpass;
-	rpCreateInfo.dependencyCount = 1;
-	rpCreateInfo.pDependencies = &dependency;
-
-	VkRenderPass imGuiRenderPass;
-	result = vkCreateRenderPass(deviceHandle, &rpCreateInfo, nullptr, &imGuiRenderPass);
-	if (result != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to create ImGUI render pass!");
-	}
-
-	std::cout << "here" << std::endl;
-
-	VkCommandBuffer imGuiCommandBuffer = BeginSingleTimeCommands(deviceHandle, commandPoolHandle);
-	ImGui_ImplVulkan_CreateFontsTexture(imGuiCommandBuffer);
-	EndSingleTimeCommands(deviceHandle, queueHandle, commandPoolHandle, imGuiCommandBuffer);
-
-	ImGui_ImplVulkan_Init(&init_info, imGuiRenderPass);
-
-	std::cout << "Success!" << std::endl;
-	*/
-
 	// Reservoir buffer
 	// =========================================================================
+	
 	std::vector<Reservoir> reservoirs(windowWidth * windowHeight * 2);
 	VkBufferCreateInfo reservoirBufferCreateInfo{};
 	reservoirBufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -1762,8 +1757,10 @@ int main()
 
 	VkDeviceAddress reservoirBufferDeviceAddress = pvkGetBufferDeviceAddressKHR(deviceHandle, &reservoirBufferDeviceAddressInfo);
 
+	// =========================================================================
 	// Vertex buffer
 	// =========================================================================
+	
 	VkBufferCreateInfo vertexBufferCreateInfo{};
 	vertexBufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	vertexBufferCreateInfo.pNext = NULL;
@@ -1836,8 +1833,10 @@ int main()
 
 	VkDeviceAddress vertexBufferDeviceAddress = pvkGetBufferDeviceAddressKHR(deviceHandle, &vertexBufferDeviceAddressInfo);
 
+	// =========================================================================
 	// Index buffer
 	// =========================================================================
+	
 	VkBufferCreateInfo indexBufferCreateInfo{};
 	indexBufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	indexBufferCreateInfo.pNext = NULL;
@@ -1910,7 +1909,10 @@ int main()
 
 	VkDeviceAddress indexBufferDeviceAddress = pvkGetBufferDeviceAddressKHR(deviceHandle, &indexBufferDeviceAddressInfo);
 
+	// =========================================================================
 	// Bottom level acceleration structure
+	// =========================================================================
+
 	VkAccelerationStructureGeometryDataKHR bottomLevelAccelerationStructureGeometryData{};
 	VkAccelerationStructureGeometryTrianglesDataKHR accelerationStructureGeometryTrianglesData{};
 	accelerationStructureGeometryTrianglesData.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
@@ -2038,7 +2040,10 @@ int main()
 		throw std::runtime_error("Failed to create bottom level acceleration structure!");
 	}
 
+	// =========================================================================
 	// Build bottom level acceleration structure
+	// =========================================================================
+
 	VkAccelerationStructureDeviceAddressInfoKHR bottomLevelAccelerationStructureDeviceAddressInfo{};
 	bottomLevelAccelerationStructureDeviceAddressInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
 	bottomLevelAccelerationStructureDeviceAddressInfo.pNext = NULL;
@@ -2178,7 +2183,10 @@ int main()
 		throw std::runtime_error("Failed to wait for bottom level acceleration structure fence!");
 	}
 
+	// =========================================================================
 	// Top level acceleration structure
+	// =========================================================================
+	
 	VkAccelerationStructureInstanceKHR bottomLevelAccelerationStructureInstance{};
 
 	VkTransformMatrixKHR transformMatrix{};
@@ -2390,7 +2398,10 @@ int main()
 		throw std::runtime_error("Failed to create top level acceleration structure!");
 	}
 
+	// =========================================================================
 	// Build top level acceleration structure
+	// =========================================================================
+	
 	VkAccelerationStructureDeviceAddressInfoKHR topLevelAccelerationStructureDeviceAddressInfo{};
 	topLevelAccelerationStructureDeviceAddressInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
 	topLevelAccelerationStructureDeviceAddressInfo.pNext = NULL;
@@ -2528,7 +2539,10 @@ int main()
 		throw std::runtime_error("Failled to wait for top level acceleration structure build fence!");
 	}
 
+	// =========================================================================
 	// Uniform buffer
+	// =========================================================================
+	
 	struct UniformStructure
 	{
 		float cameraPosition[4] = { 0, 1, 0, 1 };
@@ -2536,11 +2550,16 @@ int main()
 		float cameraUp[4] = { 0, 1, 0, 1 };
 		float cameraForward[4] = { 0, 0, 1, 1 };
 
+		uint32_t textureCount = 0;
+		uint32_t useRoughAndMetal = 0;
 		uint32_t counter = 10;
 		uint32_t other = 0;
 		uint32_t mode = 0;
 		uint32_t frameCount = 0;
 	} uniformStructure;
+
+	// Update flag for using the roughness/metalness maps.
+	uniformStructure.useRoughAndMetal = useRoughAndMetalMaps ? 1 : 0;
 
 	VkBufferCreateInfo uniformBufferCreateInfo{};
 	uniformBufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -2605,7 +2624,10 @@ int main()
 
 	vkUnmapMemory(deviceHandle, uniformDeviceMemoryHandle);
 	
+	// =========================================================================
 	// Ray trace image
+	// =========================================================================
+
 	VkImageCreateInfo rayTraceImageCreateInfo{};
 	rayTraceImageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	rayTraceImageCreateInfo.pNext = NULL;
@@ -2691,8 +2713,11 @@ int main()
 	{
 		throw std::runtime_error("Failed to create ray trace image view!");
 	}
-
+	
+	// =========================================================================
 	// Ray trace image barrier
+	// =========================================================================
+
 	VkCommandBufferBeginInfo rayTraceImageBarrierCommandBufferBeginInfo{};
 	rayTraceImageBarrierCommandBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	rayTraceImageBarrierCommandBufferBeginInfo.pNext = NULL;
@@ -2767,8 +2792,11 @@ int main()
 		throw std::runtime_error("Failed to wait for ray trace image barrier acceleration structure fence!");
 	}
 
-	// Populate texture array.
-	std::vector<ImageStruct> textureImages(textureList.size() + normalMapList.size() + combinedMapList.size() + emissiveMapList.size());
+	// =========================================================================
+	// Populate texture array
+	// =========================================================================
+	
+	std::vector<ImageStruct> textureImages(textureList.size() + normalMapList.size() + combinedMapList.size());
 	unsigned int idx = 0;
 	for (auto texture : textureList)
 	{
@@ -2796,18 +2824,15 @@ int main()
 		idx++;
 	}
 
-	// Append emissive maps to texture array.
-	for (auto emissiveMap : emissiveMapList)
-	{
-		CreateTextureImage(emissiveMap, activePhysicalDeviceHandle, deviceHandle, queueHandle, commandPoolHandle, textureImages[idx]);
-		CreateTextureImageView(deviceHandle, textureImages[idx]);
-		CreateTextureSampler(activePhysicalDeviceHandle, deviceHandle, textureImages[idx]);
-		idx++;
-	}
-
 	std::cout << "Texture list size: " << textureImages.size() << std::endl;
 
+	// Update uniform value with total texture images.
+	uniformStructure.textureCount = textureImages.size();
+
+	// =========================================================================
 	// Update descriptor set
+	// =========================================================================
+	
 	VkWriteDescriptorSetAccelerationStructureKHR accelerationStructureDescriptorInfo{};
 	accelerationStructureDescriptorInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
 	accelerationStructureDescriptorInfo.pNext = NULL;
@@ -2942,8 +2967,11 @@ int main()
 	writeDescriptorSetList.push_back(writeDescriptorSet);
 
 	vkUpdateDescriptorSets(deviceHandle, writeDescriptorSetList.size(), writeDescriptorSetList.data(), 0, NULL);
-
+	
+	// =========================================================================
 	// Material index buffer
+	// =========================================================================
+
 	std::vector<uint32_t> materialIndexList;
 	for (tinyobj::shape_t shape : shapes)
 	{
@@ -3030,7 +3058,10 @@ int main()
 
 	vkUnmapMemory(deviceHandle, materialIndexDeviceMemoryHandle);
 
+	// =========================================================================
 	// Material buffer
+	// =========================================================================
+
 	struct Material
 	{
 		float ambient[4] = { 1, 0, 0, 0 };
@@ -3111,7 +3142,10 @@ int main()
 
 	vkUnmapMemory(deviceHandle, materialDeviceMemoryHandle);
 
+	// =========================================================================
 	// Update material descriptor set
+	// =========================================================================
+
 	VkDescriptorBufferInfo materialIndexDescriptorInfo{};
 	materialIndexDescriptorInfo.buffer = materialIndexBufferHandle;
 	materialIndexDescriptorInfo.offset = 0;
@@ -3152,7 +3186,10 @@ int main()
 
 	vkUpdateDescriptorSets(deviceHandle, materialWriteDescriptorSetList.size(), materialWriteDescriptorSetList.data(), 0, NULL);
 
+	// =========================================================================
 	// Shader binding table
+	// =========================================================================
+
 	VkDeviceSize progSize = physicalDeviceRayTracingPipelineProperties.shaderGroupBaseAlignment;
 
 	VkDeviceSize shaderBindingTableSize = progSize * 4;
@@ -3266,7 +3303,10 @@ int main()
 
 	const VkStridedDeviceAddressRegionKHR callableShaderBindingTable = {};
 
+	// =========================================================================
 	// Record render pass command buffers
+	// =========================================================================
+
 	for (uint32_t i = 0; i < swapchainImageCount; i++)
 	{
 		VkCommandBufferBeginInfo renderCommandBufferBeginInfo{};
@@ -3394,11 +3434,12 @@ int main()
 		}
 	}
 
+	// =========================================================================
 	// Fences and semaphores
+	// =========================================================================
+
 	std::vector<VkFence> imageAvailableFenceHandleList(swapchainImageCount, VK_NULL_HANDLE);
-
 	std::vector<VkSemaphore> acquireImageSemaphoreHandleList(swapchainImageCount, VK_NULL_HANDLE);
-
 	std::vector<VkSemaphore> writeImageSemaphoreHandleList(swapchainImageCount, VK_NULL_HANDLE);
 
 	for (uint32_t i = 0; i < swapchainImageCount; i++)
@@ -3437,50 +3478,37 @@ int main()
 		}
 	}
 
-	// Main loop
+	// =========================================================================
+	// Main render loop
+	// =========================================================================
+
+	// Initialize frame counter to 0.
 	uint32_t currentFrame = 0;
 
+	// Set initial camera position and rotation in the scene.
 	cameraPosition[0] = -17.951f;
 	cameraPosition[1] = 3.9f;
 	cameraPosition[2] = 1.79772f;
+	cameraYaw = 0.0f;
 
+	// Define camera speed per frame.
 	float cameraMoveSpeed = 0.1f;
 
+	// Initialize audio system.
 	AudioSystem audioSystem;
 	audioSystem.Load("le_festin.wav");
 
+	// Initialize a timer singleton.
 	Timer* timer = Timer::GetInstance();
-
-	uint32_t secondCounter = 0;
 
 	while (!glfwWindowShouldClose(pWindow))
 	{
-		bool sec = timer->GetFPS();
-
-		if (sec)
-		{
-			//std::cout << "CameraPos: (" << cameraPosition[0] << ", " << cameraPosition[1] << ", " << cameraPosition[2] << ")" << std::endl;
-
-			/*
-			uint32_t sum = 0;
-			uint32_t start = static_cast<uint32_t>(audioSystem.frequency) * secondCounter;
-			for (uint32_t i = start; i < (start + static_cast<uint32_t>(audioSystem.frequency)); i++)
-			{
-				sum += static_cast<uint32_t>(audioSystem.testData[i]);
-			}
-
-			uint32_t mean = sum / static_cast<uint32_t>(audioSystem.frequency);
-
-			std::cout << mean << std::endl;
-
-			secondCounter++;
-			*/
-		}
-
 		glfwPollEvents();
 
+		// Reset camera moved flag.
 		bool isCameraMoved = false;
 
+		// Parse keyboard inputs.
 		if (keyDownIndex[GLFW_KEY_W]) 
 		{
 			cameraPosition[0] += cos(-cameraYaw - (M_PI / 2)) * cameraMoveSpeed;
@@ -3591,11 +3619,11 @@ int main()
 			uniformStructure.counter++;
 		}
 
+		// Check currect mouse pointer position versus old position to check if the
+		// camera was moved.
 		static double previousMousePositionX;
-
 		double xPos, yPos;
 		glfwGetCursorPos(pWindow, &xPos, &yPos);
-
 		if (previousMousePositionX != xPos) 
 		{
 			double mouseDifferenceX = previousMousePositionX - xPos;
@@ -3605,6 +3633,7 @@ int main()
 			isCameraMoved = 1;
 		}
 
+		// If the camera was moved, update the uniform buffer.
 		if (isCameraMoved) 
 		{
 			uniformStructure.cameraPosition[0] = cameraPosition[0];
@@ -3634,29 +3663,30 @@ int main()
 			uniformStructure.frameCount += 1;
 		}
 
+		// Copy the new uniform buffer to GPU memory.
 		result = vkMapMemory(deviceHandle, uniformDeviceMemoryHandle, 0, sizeof(UniformStructure), 0, &hostUniformMemoryBuffer);
-
 		memcpy(hostUniformMemoryBuffer, &uniformStructure, sizeof(UniformStructure));
-
 		if (result != VK_SUCCESS)
 		{
 			throw std::runtime_error("Failed to map uniform buffer memory!");
 		}
-
 		vkUnmapMemory(deviceHandle, uniformDeviceMemoryHandle);
 
+		// Wait for fences.
 		result = vkWaitForFences(deviceHandle, 1, &imageAvailableFenceHandleList[currentFrame], true, UINT32_MAX);
 		if (result != VK_SUCCESS && result != VK_TIMEOUT)
 		{
 			throw std::runtime_error("Failed to wait for fence!");
 		}
 
+		// Reset fences once they are ready.
 		result = vkResetFences(deviceHandle, 1, &imageAvailableFenceHandleList[currentFrame]);
 		if (result != VK_SUCCESS)
 		{
 			throw std::runtime_error("Failed to reset fence!");
 		}
 
+		// Get the next image from the swapchain.
 		uint32_t currentImageIndex = -1;
 		result = vkAcquireNextImageKHR(deviceHandle, swapchainHandle, UINT32_MAX, 
 			acquireImageSemaphoreHandleList[currentFrame], VK_NULL_HANDLE, &currentImageIndex);
@@ -3667,6 +3697,7 @@ int main()
 
 		VkPipelineStageFlags pipelineStageFlags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
+		// Submit new queue.
 		VkSubmitInfo submitInfo{};
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 		submitInfo.pNext = NULL;
@@ -3677,13 +3708,13 @@ int main()
 		submitInfo.pCommandBuffers = &commandBufferHandleList[currentImageIndex];
 		submitInfo.signalSemaphoreCount = 1;
 		submitInfo.pSignalSemaphores = &writeImageSemaphoreHandleList[currentImageIndex];
-
 		result = vkQueueSubmit(queueHandle, 1, &submitInfo, imageAvailableFenceHandleList[currentFrame]);
 		if (result != VK_SUCCESS)
 		{
 			throw std::runtime_error("Failed to submit to queue!");
 		}
 
+		// Present new image.
 		VkPresentInfoKHR presentInfo{};
 		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 		presentInfo.pNext = NULL;
@@ -3693,19 +3724,23 @@ int main()
 		presentInfo.pSwapchains = &swapchainHandle;
 		presentInfo.pImageIndices = &currentImageIndex;
 		presentInfo.pResults = NULL;
-
 		result = vkQueuePresentKHR(queueHandle, &presentInfo);
 		if (result != VK_SUCCESS)
 		{
 			throw std::runtime_error("Failed to present from queue!");
 		}
 
+		// Iterate the frame counter.
 		currentFrame = (currentFrame + 1) % swapchainImageCount;
 
+		// Update the streaming audio.
 		audioSystem.UpdateStream();
 	}
 
-	// Cleanup
+	// =========================================================================
+	// Cleanup resources before application terminates
+	// =========================================================================
+
 	result = vkDeviceWaitIdle(deviceHandle);
 	if (result != VK_SUCCESS)
 	{

@@ -27,7 +27,9 @@ layout(binding = 1, set = 0) uniform Camera
     vec4 right;
     vec4 up;
     vec4 forward;
-
+    
+    uint textureCount;
+    uint useRoughAndMetal;
     uint counter;
     uint other;
     uint mode;
@@ -59,7 +61,7 @@ layout(binding = 6, set = 0) buffer ReservoirBuffer
     Reservoir data[]; // size = windowWidth * windowHeight * 2
 } reservoirs;
 
-layout(binding = 5) uniform sampler2D texSampler[272];
+layout(binding = 5) uniform sampler2D texSampler[];
 
 vec3 UniformSampleHemisphere(vec2 uv) 
 {
@@ -125,7 +127,7 @@ bool CastShadowRay(vec3 hitPosition, vec3 lightPosition)
                 0,                  // ShaderBindingTable hit group for stride.
                 1,                  // Shader Binding Table miss shader index.
                 shadowRayOrigin,    // Ray origin.
-                0.001,              // Ray min range.
+                EPSILON,            // Ray min range.
                 shadowRayDirection, // Ray direction.
                 shadowRayDistance,  // Ray max range.
                 1);                 // Payload (location = 1).
@@ -253,52 +255,58 @@ vec3 GetLightColor(int lightPrimitiveID, inout float lightPower)
         return lightColor;
     }
 
-    if (lightPrimitiveID >= 2807900 && lightPrimitiveID < 2810660)      // Blue string lights - 2760
+    if (lightPrimitiveID >= 2806014 && lightPrimitiveID < 2808774)      // Blue string lights - 2760
     {
         lightColor = pow(vec3(0.0, 0.01685, 1.0), vec3(2.2));
         lightPower = 1.0;
     }
-    else if (lightPrimitiveID >= 2810660 && lightPrimitiveID < 2813880) // Green string lights - 3220
+    else if (lightPrimitiveID >= 2808774 && lightPrimitiveID < 2811994) // Green string lights - 3220
     {
         lightColor = pow(vec3(0.0, 1.0, 0.00153), vec3(2.2));
         lightPower = 1.0;
     }
-    else if (lightPrimitiveID >= 2813880 && lightPrimitiveID < 2817560) // Lanterns - 3680
+    
+    else if (lightPrimitiveID >= 2811994 && lightPrimitiveID < 2814294) // Orange string lights - 2300
+    {
+        lightColor = pow(vec3(1.0, 0.3412, 0.2), vec3(2.2));
+        lightPower = 1.0;
+    }
+    else if (lightPrimitiveID >= 2814294 && lightPrimitiveID < 2816134) // Pink string lights - 1840
+    {
+        lightColor = pow(vec3(1.0, 0.00061, 0.56641), vec3(2.2));
+        lightPower = 1.0;
+    }
+    else if (lightPrimitiveID >= 2816134 && lightPrimitiveID < 2817744) // Red string lights - 1610
+    {
+        lightColor = pow(vec3(1.0, 0.00031, 0.0), vec3(2.2));
+        lightPower = 1.0;
+    }
+    else if (lightPrimitiveID >= 2817744 && lightPrimitiveID < 2820734) // White string lights - 2990
+    {
+        lightColor = pow(vec3(0.9), vec3(2.2));
+        lightPower = 1.0;
+    }
+    else if (lightPrimitiveID >= 2820734 && lightPrimitiveID < 2824414) // Lanterns - 3680 => 3680 * 2 = 7360
     {
         //lightColor = pow(vec3(1.0, 0.2832, 0.06299), vec3(2.2));
         lightColor = pow(vec3(0.7, 0.5, 0.2), vec3(2.2));
         lightPower = 2.0;
     }
-    else if (lightPrimitiveID >= 2817560 && lightPrimitiveID < 2819860) // Orange string lights - 2300
-    {
-        lightColor = pow(vec3(1.0, 0.3412, 0.2), vec3(2.2));
-        lightPower = 1.0;
-    }
-    else if (lightPrimitiveID >= 2819860 && lightPrimitiveID < 2821700) // Pink string lights - 1840
-    {
-        lightColor = pow(vec3(1.0, 0.00061, 0.56641), vec3(2.2));
-        lightPower = 1.0;
-    }
-    else if (lightPrimitiveID >= 2821700 && lightPrimitiveID < 2823310) // Red string lights - 1610
-    {
-        lightColor = pow(vec3(1.0, 0.00031, 0.0), vec3(2.2));
-        lightPower = 1.0;
-    }
-    else if (lightPrimitiveID >= 2823310 && lightPrimitiveID < 2823324) // Spotlights - 14
-    {
-        lightColor = pow(vec3(1.0), vec3(2.2));
-        lightPower = 10.0;
-    }
-    else if (lightPrimitiveID >= 2823324 && lightPrimitiveID < 2825340) // Streetlights - 2016
+    else if (lightPrimitiveID >= 2824414 && lightPrimitiveID < 2826430) // Streetlights - 2016 => 2016 * 2 = 4032
     {
         //lightColor = pow(vec3(1.0, 0.2832, 0.06299), vec3(2.2));
         lightColor = pow(vec3(0.9), vec3(2.2));
         lightPower = 2.0;
     }
-    else if (lightPrimitiveID >= 2825340 && lightPrimitiveID < 2828330) // White string lights - 2990
+    else if (lightPrimitiveID >= 2826430 && lightPrimitiveID < 2826638) // Headlights - 208 => 208 * 3 = 624
     {
-        lightColor = pow(vec3(0.9), vec3(2.2));
-        lightPower = 1.0;
+        lightColor = pow(vec3(0.9, 0.9, 0.1), vec3(2.2));
+        lightPower = 3.0;
+    }
+    else if (lightPrimitiveID >= 2826638 && lightPrimitiveID < 2826672) // Spotlights - 34 = > 34 * 20 = 680
+    {
+        lightColor = pow(vec3(1.0), vec3(2.2));
+        lightPower = 20.0;
     }
 
     return lightColor;
@@ -309,75 +317,59 @@ int GetLightPrimitiveID(inout vec3 lightColor, inout float lightPower, vec2 seed
     // Random number between [0, 1].
     float p = rand(seed);
 
-    // Get the index of a emitting primitive between [2807900, 2828330).
+    // Get the index of a emitting primitive between [2806014, 2826672).
     int i = 0;
     if (camera.mode == 1)
     {
-        i = 2807900;
+        i = 2806014;
     }
     else if (camera.mode == 2 || camera.mode == 3 || camera.mode == 4 || camera.mode == 5)
     {
-        i = 2807900 + int(p * 230.0);
+        i = 2806014 + int(p * 230.0);
     }
     else
     {
-        int n = 26252;
+        int n = 27416;
         int np = int(float(n) * p);
+
+        // Update pseudo-random seed.
+        seed = vec2(sqrt(np * seed.y), sqrt(np * seed.x));
+        p = rand(seed);
 
         if (np < 14720) // Select a string light.
         {
-            // Update pseudo-random seed.
-            seed = vec2(sqrt(np * seed.y), sqrt(np * seed.x));
-            p = rand(seed);
-
             int n = 14720 - 1;
             int np = int(float(n) * p);
 
-            if (np < (2760 + 3220))
-            {
-                i = 2807900 + np;
-            }
-            else if (np < (2760 + 3220 + 2300 + 1840 + 1610))
-            {
-                i = 2817560 + np;
-            }
-            else
-            {
-                i = 2825340 + np;
-            }
+            i = 2806014 + np;
         }
-        else if (np >= 14720 && np <  (14720 + 3680 * 2)) // Select a lantern.
+        else if (np >= 14720 && np < 22080) // Select a lantern.
         {
-            // Update pseudo-random seed.
-            seed = vec2(sqrt(np * seed.y), sqrt(np * seed.x));
-            p = rand(seed);
-
             int n = 3680 - 1;
             int np = int(float(n) * p);
 
-            i = 2813880 + np;
+            i = 2820734 + np;
         }
-        else if (np >= (14720 + 3680 * 5) && np < (14720 + 3680 * 2 + 14 * 10)) // Select a spot light.
+        else if (np >= 22080 && np < 26112) // Select a street light.
         {
-            // Update pseudo-random seed.
-            seed = vec2(sqrt(np * seed.y), sqrt(np * seed.x));
-            p = rand(seed);
-
-            int n = 14;
+            int n = 2016 - 1;
             int np = int(float(n) * p);
 
-            i = 2823310 + np;
+            i = 2824414 + np;
         }
-        else if (np >= (14720 + 3680 * 5 + 14 * 10) && np < (14720 + 3680 * 2 + 14 * 10 + 2016 * 2)) // Select a street light.
+        else if (np >= 26112 && np < 26736)
         {
-            // Update pseudo-random seed.
-            seed = vec2(sqrt(np * seed.y), sqrt(np * seed.x));
-            p = rand(seed);
-
-            int n = 14;
+            int n = 208 - 1;
             int np = int(float(n) * p);
 
-            i = 2823324 + np;
+            i = 2826430 + np;
+        }
+        else if (np >= 26736 && np < 27416) // Select a spot light.
+        {
+            int n = 34 - 1;
+            int np = int(float(n) * p);
+
+            i = 2826638 + np;
         }
     }
 
@@ -396,7 +388,7 @@ void main()
     // ---------------------- Check if the first path hits a light directly -----------------------
     if (camera.mode == 0)
     {
-        if (gl_PrimitiveID >= 2807900 && gl_PrimitiveID < 2807900 + 230)
+        if (gl_PrimitiveID >= 2806014 && gl_PrimitiveID < 2806014 + 230)
         {
             payload.directColor = vec3(1.0);
         }
@@ -410,7 +402,7 @@ void main()
     }
     else if (camera.mode == 1)
     {
-        if (gl_PrimitiveID == 2807900)
+        if (gl_PrimitiveID == 2806014)
         {
             payload.directColor = vec3(1.0);
             payload.rayDepth += 1;
@@ -419,7 +411,7 @@ void main()
     }
     else if (camera.mode == 2 || camera.mode == 3 || camera.mode == 4 || camera.mode == 5)
     {
-        if (gl_PrimitiveID >= 2807900 && gl_PrimitiveID < 2807900 + 230)
+        if (gl_PrimitiveID >= 2806014 && gl_PrimitiveID < 2806014 + 230)
         {
             payload.directColor = vec3(1.0);
             payload.rayDepth += 1;
@@ -428,57 +420,63 @@ void main()
     }
     else if (camera.mode >= 6)
     {
-        if (gl_PrimitiveID >= 2807900 && gl_PrimitiveID < 2810660)      // Blue string lights
+        if (gl_PrimitiveID >= 2806014 && gl_PrimitiveID < 2808774)      // Blue string lights
         {
             payload.directColor = pow(vec3(0.0, 0.01685, 1.0), vec3(2.2));
             payload.rayActive = 0;
             return;
         }
-        else if (gl_PrimitiveID >= 2810660 && gl_PrimitiveID < 2813880) // Green string lights
+        else if (gl_PrimitiveID >= 2808774 && gl_PrimitiveID < 2811994) // Green string lights
         {
             payload.directColor = pow(vec3(0.0, 1.0, 0.00153), vec3(2.2));
             payload.rayActive = 0;
             return;
         }
-        else if (gl_PrimitiveID >= 2813880 && gl_PrimitiveID < 2817560) // Lanterns
+        else if (gl_PrimitiveID >= 2811994 && gl_PrimitiveID < 2814294) // Orange string lights
+        {
+            payload.directColor = pow(vec3(1.0, 0.3412, 0.2), vec3(2.2));
+            payload.rayActive = 0;
+            return;
+        }
+        else if (gl_PrimitiveID >= 2814294 && gl_PrimitiveID < 2816134) // Pink string lights
+        {
+            payload.directColor = pow(vec3(1.0, 0.00061, 0.56641), vec3(2.2));
+            payload.rayActive = 0;
+            return;
+        }
+        else if (gl_PrimitiveID >= 2816134 && gl_PrimitiveID < 2817744) // Red string lights
+        {
+            payload.directColor = pow(vec3(1.0, 0.00031, 0.0), vec3(2.2));
+            payload.rayActive = 0;
+            return;
+        }
+        else if (gl_PrimitiveID >= 2817744 && gl_PrimitiveID < 2820734) // White string lights
+        {
+            payload.directColor = pow(vec3(1.0), vec3(2.2));
+            payload.rayActive = 0;
+            return;
+        }
+        else if (gl_PrimitiveID >= 2820734 && gl_PrimitiveID < 2824414) // Lanterns
         {
             //payload.directColor = pow(vec3(1.0, 0.2832, 0.06299), vec3(2.2));
             payload.directColor = pow(vec3(0.7, 0.5, 0.2), vec3(2.2));
             payload.rayActive = 0;
             return;
         }
-        else if (gl_PrimitiveID >= 2817560 && gl_PrimitiveID < 2819860) // Orange string lights
-        {
-            payload.directColor = pow(vec3(1.0, 0.3412, 0.2), vec3(2.2));
-            payload.rayActive = 0;
-            return;
-        }
-        else if (gl_PrimitiveID >= 2819860 && gl_PrimitiveID < 2821700) // Pink string lights
-        {
-            payload.directColor = pow(vec3(1.0, 0.00061, 0.56641), vec3(2.2));
-            payload.rayActive = 0;
-            return;
-        }
-        else if (gl_PrimitiveID >= 2821700 && gl_PrimitiveID < 2823310) // Red string lights
-        {
-            payload.directColor = pow(vec3(1.0, 0.00031, 0.0), vec3(2.2));
-            payload.rayActive = 0;
-            return;
-        }
-        else if (gl_PrimitiveID >= 2823310 && gl_PrimitiveID < 2823324) // Spotlights
-        {
-            payload.directColor = pow(vec3(1.0), vec3(2.2));
-            payload.rayActive = 0;
-            return;
-        }
-        else if (gl_PrimitiveID >= 2823324 && gl_PrimitiveID < 2825340) // Streetlights
+        else if (gl_PrimitiveID >= 2824414 && gl_PrimitiveID < 2826430) // Streetlights
         {
             //payload.directColor = pow(vec3(1.0, 0.2832, 0.06299), vec3(2.2));
             payload.directColor = pow(vec3(1.0), vec3(2.2));
             payload.rayActive = 0;
             return;
         }
-        else if (gl_PrimitiveID >= 2825340 && gl_PrimitiveID < 2828330) // White string lights
+        else if (gl_PrimitiveID >= 2826430 && gl_PrimitiveID < 2826638) // Headlights
+        {
+            payload.directColor = pow(vec3(0.9, 0.9, 0.1), vec3(2.2));
+            payload.rayActive = 0;
+            return;
+        }
+        else if (gl_PrimitiveID >= 2826638 && gl_PrimitiveID < 2826672) // Spotlights
         {
             payload.directColor = pow(vec3(1.0), vec3(2.2));
             payload.rayActive = 0;
@@ -519,7 +517,7 @@ void main()
     // Calculate the UV coordinates of the hit position using the barycentric position.
     vec2 uv = uvA * barycentricHitCoord.x + uvB * barycentricHitCoord.y + uvC * barycentricHitCoord.z;
 
-    // Calculate tangent and bitangent vectors using UVs.
+    // Calculate tangent vector using the UVs.
     vec3 edge1 = primitiveVertexB - primitiveVertexA;
     vec3 edge2 = primitiveVertexC - primitiveVertexA;
     vec2 dUV1 = uvB - uvA;
@@ -538,15 +536,27 @@ void main()
     // Calculate the normal of this triangle.
     vec3 geometricNormal = normalize(cross(primitiveVertexB - primitiveVertexA, primitiveVertexC - primitiveVertexA));
     
+    // Gram-Schmidt process.
+    //tangent = normalize(tangent - dot(tangent, geometricNormal) * geometricNormal);
+    //vec3 bitangent = cross(geometricNormal, tangent);
+
     // Sample textures.
     vec3 albedo = vec3(texture(texSampler[idx], uv));
     mat3 TBN = mat3(tangent, bitangent, geometricNormal);
-    vec3 surfaceNormal = vec3(texture(texSampler[idx+132], uv));
+    vec3 surfaceNormal = vec3(texture(texSampler[idx+130], uv));
 
-    // Normal texture only has x, y values so we need to calculate z.
-    surfaceNormal.z = sqrt(1.0 - (surfaceNormal.x * surfaceNormal.x) - (surfaceNormal.y * surfaceNormal.y));
+    float roughness = 0.25;
+    float metalness = 0.25;
 
-    // Use normal map and geometric normal to calculate final normal.
+    if (camera.useRoughAndMetal == 1)
+    {
+        roughness = vec3(texture(texSampler[idx+260], uv)).y;
+        metalness = vec3(texture(texSampler[idx+260], uv)).z;
+    }
+    // Convert normal map value from RGB values to direction vector.
+    //surfaceNormal = normalize(surfaceNormal * 2.0 - 1.0);
+
+    // Use normal map and TBN matrix to calculate actual normal.
     vec3 N = normalize(TBN * surfaceNormal);
 
     // Adjust light absorbtion parameter.
@@ -561,7 +571,7 @@ void main()
     Reservoir reservoir = { 0.0, 0.0, 0.0, 0.0 };
 
     // Define number of lights in the scene for uniform random probability value.
-    int lightCount = 20430;
+    int lightCount = 20658;
     if (camera.mode < 6)
     {
         lightCount = 230;
@@ -571,7 +581,7 @@ void main()
 
     // Initialize light intensity and color.
     float lightPower = 1.0;
-    float totalLightPower = 43340.0;
+    float totalLightPower = 27416.0;
     vec3 lightColor = vec3(0.0);
 
     if (camera.mode == 7)
@@ -601,7 +611,7 @@ void main()
             float p = lightPower / float(totalLightPower);
 
             // w of the light is f * Le * G / pdf.
-            vec3 brdfValue = CookTorranceBRDF(randomLightPosition, lightColor, lightPower, N, hitPosition, camera.position.xyz, 0.5, 0.04, albedo);
+            vec3 brdfValue = CookTorranceBRDF(randomLightPosition, lightColor, lightPower, N, hitPosition, camera.position.xyz, roughness, metalness, albedo);
 
             float dist = length(randomLightPosition - hitPosition);
             float attenuation = 1.0 / (1.0 + 0.09 * dist + 0.032 * (dist * dist));
@@ -637,7 +647,7 @@ void main()
     int finalLightIndex = int(reservoir.y);
     vec3 randomLightPosition = GetRandomPositionOnLight(finalLightIndex, seed);
     lightColor = GetLightColor(finalLightIndex, lightPower);
-    vec3 brdfValue = CookTorranceBRDF(randomLightPosition, lightColor, lightPower, N, hitPosition, camera.position.xyz, 0.5, 0.04, albedo);
+    vec3 brdfValue = CookTorranceBRDF(randomLightPosition, lightColor, lightPower, N, hitPosition, camera.position.xyz, roughness, metalness, albedo);
 
     float dist = length(randomLightPosition - hitPosition);
     float attenuation = 1.0 / (1.0 + 0.09 * dist + 0.032 * (dist * dist));
@@ -714,7 +724,7 @@ void main()
     finalLightIndex = int(prevReservoir.y);
     randomLightPosition = GetRandomPositionOnLight(finalLightIndex, seed);
     lightColor = GetLightColor(finalLightIndex, lightPower);
-    brdfValue = CookTorranceBRDF(randomLightPosition, lightColor, lightPower, N, hitPosition, camera.position.xyz, 0.5, 0.04, albedo);
+    brdfValue = CookTorranceBRDF(randomLightPosition, lightColor, lightPower, N, hitPosition, camera.position.xyz, roughness, metalness, albedo);
 
     dist = length(randomLightPosition - hitPosition);
     attenuation = 1.0 / (1.0 + 0.09 * dist + 0.032 * (dist * dist));
@@ -757,7 +767,7 @@ void main()
     finalLightIndex = int(reservoir.y);
     randomLightPosition = GetRandomPositionOnLight(finalLightIndex, seed + 11.11);
     lightColor = GetLightColor(finalLightIndex, lightPower);
-    brdfValue = CookTorranceBRDF(randomLightPosition, lightColor, lightPower, N, hitPosition, camera.position.xyz, 0.5, 0.04, albedo);
+    brdfValue = CookTorranceBRDF(randomLightPosition, lightColor, lightPower, N, hitPosition, camera.position.xyz, roughness, metalness, albedo);
     
     dist = length(randomLightPosition - hitPosition);
     attenuation = 1.0 / (1.0 + 0.09 * dist + 0.032 * (dist * dist));
@@ -814,7 +824,7 @@ void main()
                     int lightIndex = int(neighbourReservoir.y);
                     randomLightPosition = GetRandomPositionOnLight(lightIndex, seed);
                     lightColor = GetLightColor(lightIndex, lightPower);
-                    brdfValue = CookTorranceBRDF(randomLightPosition, lightColor, lightPower, N, hitPosition, camera.position.xyz, 0.5, 0.04, albedo);
+                    brdfValue = CookTorranceBRDF(randomLightPosition, lightColor, lightPower, N, hitPosition, camera.position.xyz, roughness, metalness, albedo);
 
                     dist = length(randomLightPosition - hitPosition);
                     attenuation = 1.0 / (1.0 + 0.09 * dist + 0.032 * (dist * dist));
@@ -849,7 +859,7 @@ void main()
     finalLightIndex = int(reservoir.y);
     randomLightPosition = GetRandomPositionOnLight(finalLightIndex, seed + 11.11);
     lightColor = GetLightColor(finalLightIndex, lightPower);
-    brdfValue = CookTorranceBRDF(randomLightPosition, lightColor, lightPower, N, hitPosition, camera.position.xyz, 0.5, 0.04, albedo);
+    brdfValue = CookTorranceBRDF(randomLightPosition, lightColor, lightPower, N, hitPosition, camera.position.xyz, roughness, metalness, albedo);
     
     dist = length(randomLightPosition - hitPosition);
     attenuation = 1.0 / (1.0 + 0.09 * dist + 0.032 * (dist * dist));

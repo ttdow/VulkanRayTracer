@@ -168,6 +168,7 @@
     <ClCompile Include="inc\imgui_stdlib.cpp" />
     <ClCompile Include="inc\imgui_tables.cpp" />
     <ClCompile Include="inc\imgui_widgets.cpp" />
+    <ClCompile Include="inc\mikktspace.c" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Timer.cpp" />
   </ItemGroup>
@@ -184,6 +185,7 @@
     <ClInclude Include="inc\imstb_textedit.h" />
     <ClInclude Include="inc\imstb_truetype.h" />
     <ClInclude Include="inc\json.hpp" />
+    <ClInclude Include="inc\mikktspace.h" />
     <ClInclude Include="inc\stb_image.h" />
     <ClInclude Include="inc\stb_image_write.h" />
     <ClInclude Include="inc\tiny_gltf.h" />
