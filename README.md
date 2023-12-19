@@ -1,6 +1,6 @@
 # Vulkan Path Tracer with Reservoir-based Spatiotemporal Importance Resampling
 
-This is an implementation of the 2020 paper Spatiotemporal reservoir rresampling for real-time ray tracing with dynamic direct light by Bitterli et al. (available here: https://research.nvidia.com/sites/default/files/pubs/2020-07_Spatiotemporal-reservoir-resampling/ReSTIR.pdf).
+This is an implementation of the 2020 paper Spatiotemporal reservoir resampling for real-time ray tracing with dynamic direct light by Bitterli et al. (available here: https://research.nvidia.com/sites/default/files/pubs/2020-07_Spatiotemporal-reservoir-resampling/ReSTIR.pdf).
 
 This was created as a project for the course CPSC 691: Rendering led by Dr. Mario Costa Sousa at the University of Calgary in Fall 2023.
 
