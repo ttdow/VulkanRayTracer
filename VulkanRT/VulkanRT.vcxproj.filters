@@ -109,20 +109,13 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="res\shaders\shader.rchit" />
-    <None Include="res\shaders\shader.rgen" />
-    <None Include="res\shaders\shader.rmiss" />
-    <None Include="res\shaders\shader_shadow.rmiss" />
-    <None Include="res\shaders\raytrace.rchit" />
     <None Include="res\shaders\raytrace.rgen" />
     <None Include="res\shaders\raytrace.rmiss" />
     <None Include="res\shaders\raytrace_shadow.rmiss" />
     <None Include="res\shaders\raycommon.glsl" />
     <None Include="inc\imgui.natstepfilter" />
     <None Include="res\shaders\raytrace.glsl" />
-    <None Include="res\shaders\raytrace2.rchit" />
-    <None Include="res\shaders\raytrace3.rchit" />
-    <None Include="res\shaders\raytrace4.rchit" />
+    <None Include="res\shaders\raytrace.rchit" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="res\textures\texture.jpg">

@@ -10,20 +10,28 @@ Alternatively, you can open the solution file in Microsoft Visual Studio and bui
 
 The Wavefront OBJ model for this application is located here: https://drive.google.com/drive/folders/1oX_53pTtxt9kcCy0BvGHEn_NE6Nnpm3c?usp=drive_link. Download the zip file and unzip the contents into the ./VulkanRT/res/ directory.
 
+Accompanying presentation: https://docs.google.com/presentation/d/1Y2qVG5eMhl7w3aZkautfis-UjgGOzQBPnwqqsnLPTc8/edit?usp=drive_link
+
 Video demo: https://youtu.be/VTCFcmIccns
 
 Project as a zip file: https://drive.google.com/drive/folders/1E7xNBb7jE-35IulticRyxt8VFSTt2sMO?usp=drive_link
 
 Basic Vulkan ray tracing implementation used:
-    https://github.com/WilliamLewww/vulkan_ray_tracing_minimal_abstraction
+    <ul>
+        <li>https://github.com/WilliamLewww/vulkan_ray_tracing_minimal_abstraction></li>
+    </ul>
 
 Additional Vulkan code used:
-    https://vulkan-tutorial.com/
+    <ul>
+        <li>https://vulkan-tutorial.com/</li>
+        <li>https://github.com/SaschaWillems/Vulkan</li>
+    </ul>
 
 Other resources used:
-    https://lousodrome.net/blog/light/2022/05/14/reading-list-on-restir/
-    http://www.zyanidelab.com/how-to-add-thousands-of-lights-to-your-renderer/
-    https://gamehacker1999.github.io/posts/restir/
-    https://github.com/SaschaWillems/Vulkan
-
+    <ul>
+        <li>https://lousodrome.net/blog/light/2022/05/14/reading-list-on-restir/</li>
+        <li>http://www.zyanidelab.com/how-to-add-thousands-of-lights-to-your-renderer/</li>
+        <li>https://gamehacker1999.github.io/posts/restir/</li>
+    </ul>
+    
 Music is "Le Festin" from the 2007 movie Ratatouille by Camille, Michael Giacchino.
