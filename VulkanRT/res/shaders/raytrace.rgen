@@ -21,15 +21,16 @@ layout(binding = 1, set = 0) uniform Camera
     uint useRoughAndMetal;
     uint counter;
     uint other;
-    uint mode;
     uint frameCount;
 } camera;
 
 // Output image.
 layout(binding = 4, set = 0, rgba32f) uniform image2D image;
 
+// Textures.
 layout(binding = 5) uniform sampler2D texSampler[];
 
+// Reservoirs.
 layout(binding = 6, set = 0) buffer ReservoirBuffer
 {
     Reservoir data[];
@@ -59,6 +60,7 @@ void main()
         reservoirBuffer.data[reservoirIndex].wsum = 0.0;
         reservoirBuffer.data[reservoirIndex].m = 0.0;
         reservoirBuffer.data[reservoirIndex].w = 0.0;
+        reservoirBuffer.data[reservoirIndex].pos = vec3(0.0);
     }
 
     // Iterate multiple samples per pixel?
@@ -120,11 +122,6 @@ void main()
 
         // Sum the direct and indirect lighting effects.
         radiance += payload.directColor; // + payload.indirectColor);
-
-        // Clamp values between [0.0, 1.0].
-        //radiance.x = clamp(radiance.x, 0.0, 1.0);
-        //radiance.y = clamp(radiance.y, 0.0, 1.0);
-        //radiance.z = clamp(radiance.z, 0.0, 1.0);
 
         // Update random seed for next sample.
         seed = vec2(dy + uv.x, dx + camera.frameCount);

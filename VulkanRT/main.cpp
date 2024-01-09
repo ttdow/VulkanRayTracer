@@ -57,6 +57,8 @@ struct Reservoir
 	float wsum; // The sum of weights.
 	float M;	// The number of samples seen so far.
 	float W;	// Probablistic weight.
+
+	glm::vec3 pos; // Position on area light source.
 };
 
 struct Vertex
@@ -534,132 +536,6 @@ void LoadModel(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, st
 	//PrintDetails(ceiling, "Ceiling");
 }
 
-/*
-class App
-{
-public:
-	void Run()
-	{
-		InitWindow();
-		InitVulkan();
-		MainLoop();
-		Cleanup();
-	}
-
-private:
-
-	GLFWwindow* pWindow;
-	VkInstance instanceHandle;
-
-	void InitWindow()
-	{
-		// GLFW Window
-		glfwInit();
-		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-		glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-		pWindow = glfwCreateWindow(1280, 720, "Vulkan Ray Tracing", glfwGetPrimaryMonitor(), nullptr);
-		glfwSetInputMode(pWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-		glfwSetKeyCallback(pWindow, KeyCallback);
-
-		std::cout << "Window created successfully." << std::endl;
-	}
-
-	void InitVulkan()
-	{
-		CreateInstance();
-	}
-
-	void CreateInstance()
-	{
-		std::vector<VkValidationFeatureEnableEXT> validationFeatureEnableList =
-		{
-			VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT,
-			VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT
-		};
-
-		VkDebugUtilsMessageSeverityFlagBitsEXT debugUtilsMessageSeverityFlagBits =
-			(VkDebugUtilsMessageSeverityFlagBitsEXT)(
-				VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
-				VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-				VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT);
-
-		VkDebugUtilsMessageTypeFlagBitsEXT debugUtilsMessageTypeFlagBits =
-			(VkDebugUtilsMessageTypeFlagBitsEXT)(
-				VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
-				VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT);
-
-		VkValidationFeaturesEXT validationFeatures{};
-		validationFeatures.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
-		validationFeatures.pNext = NULL;
-		validationFeatures.enabledValidationFeatureCount = static_cast<uint32_t>(validationFeatureEnableList.size());
-		validationFeatures.pEnabledValidationFeatures = validationFeatureEnableList.data();
-		validationFeatures.disabledValidationFeatureCount = 0;
-		validationFeatures.pDisabledValidationFeatures = NULL;
-
-		VkDebugUtilsMessengerCreateInfoEXT debugUtilsMessengerCreateInfo{};
-		debugUtilsMessengerCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-		debugUtilsMessengerCreateInfo.pNext = &validationFeatures;
-		debugUtilsMessengerCreateInfo.flags = 0;
-		debugUtilsMessengerCreateInfo.messageSeverity = static_cast<VkDebugUtilsMessageSeverityFlagsEXT>(debugUtilsMessageSeverityFlagBits);
-		debugUtilsMessengerCreateInfo.messageType = static_cast<VkDebugUtilsMessageTypeFlagsEXT>(debugUtilsMessageTypeFlagBits);
-		debugUtilsMessengerCreateInfo.pfnUserCallback = &DebugCallback;
-		debugUtilsMessengerCreateInfo.pUserData = NULL;
-
-		VkApplicationInfo appInfo{};
-		appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-		appInfo.pApplicationName = "Vulkan Ray Tracing";
-		appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-		appInfo.pEngineName = "No engine";
-		appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-		appInfo.apiVersion = VK_API_VERSION_1_3;
-
-		std::vector<const char*> instanceLayerList = { "VK_LAYER_KHRONOS_validation" };
-
-		uint32_t glfwExtensionCount = 0;
-		const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-
-		std::vector<const char*> instanceExtensionList(glfwExtensions, glfwExtensions + glfwExtensionCount);
-		instanceExtensionList.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-		instanceExtensionList.push_back("VK_KHR_get_physical_device_properties2");
-		instanceExtensionList.push_back("VK_KHR_surface");
-
-		VkInstanceCreateInfo instanceCreateInfo{};
-		instanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-		instanceCreateInfo.pNext = &debugUtilsMessengerCreateInfo;
-		instanceCreateInfo.flags = 0;
-		instanceCreateInfo.pApplicationInfo = &appInfo;
-		instanceCreateInfo.enabledLayerCount = static_cast<uint32_t>(instanceLayerList.size());
-		instanceCreateInfo.ppEnabledLayerNames = instanceLayerList.data();
-		instanceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(instanceExtensionList.size());
-		instanceCreateInfo.ppEnabledExtensionNames = instanceExtensionList.data();
-
-		instanceHandle = VK_NULL_HANDLE;
-		VkResult result = vkCreateInstance(&instanceCreateInfo, NULL, &instanceHandle);
-		if (result != VK_SUCCESS)
-		{
-			throw std::runtime_error("Failed to create Vulkan instance!");
-		}
-
-		std::cout << "Vulkan instance created successfully." << std::endl;
-	}
-
-	void MainLoop()
-	{
-		while (!glfwWindowShouldClose(pWindow))
-		{
-			glfwPollEvents();
-		}
-	}
-
-	void Cleanup()
-	{
-		glfwDestroyWindow(pWindow);
-		
-		glfwTerminate();
-	}
-};
-*/
-
 bool IsDeviceSuitable(VkPhysicalDevice device)
 {
 	VkPhysicalDeviceProperties deviceProperties;
@@ -674,11 +550,6 @@ bool IsDeviceSuitable(VkPhysicalDevice device)
 	}
 
 	return false;
-}
-
-void PickPhysicalDevice()
-{
-
 }
 
 int main()
@@ -922,9 +793,7 @@ int main()
 	
 	uint32_t queueFamilyPropertyCount = 0;
 	vkGetPhysicalDeviceQueueFamilyProperties(activePhysicalDeviceHandle, &queueFamilyPropertyCount, NULL);
-
 	std::vector<VkQueueFamilyProperties> queueFamilyPropertiesList(queueFamilyPropertyCount);
-
 	vkGetPhysicalDeviceQueueFamilyProperties(activePhysicalDeviceHandle, &queueFamilyPropertyCount, queueFamilyPropertiesList.data());
 
 	uint32_t queueFamilyIndex = -1;
@@ -1687,7 +1556,7 @@ int main()
 	// Reservoir buffer
 	// =========================================================================
 	
-	std::vector<Reservoir> reservoirs(windowWidth * windowHeight * 2);
+	std::vector<Reservoir> reservoirs(windowWidth * windowHeight);
 	VkBufferCreateInfo reservoirBufferCreateInfo{};
 	reservoirBufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	reservoirBufferCreateInfo.pNext = NULL;
@@ -2554,7 +2423,6 @@ int main()
 		uint32_t useRoughAndMetal = 0;
 		uint32_t counter = 10;
 		uint32_t other = 0;
-		uint32_t mode = 0;
 		uint32_t frameCount = 0;
 	} uniformStructure;
 
@@ -3555,56 +3423,6 @@ int main()
 		if (keyDownIndex[GLFW_KEY_N])
 		{
 			uniformStructure.other = 0;
-			uniformStructure.frameCount = 0;
-		}
-		if (keyDownIndex[GLFW_KEY_0])
-		{
-			uniformStructure.mode = 0;
-			uniformStructure.frameCount = 0;
-		}
-		if (keyDownIndex[GLFW_KEY_1])
-		{
-			uniformStructure.mode = 1;
-			uniformStructure.frameCount = 0;
-		}
-		if (keyDownIndex[GLFW_KEY_2])
-		{
-			uniformStructure.mode = 2;
-			uniformStructure.frameCount = 0;
-		}
-		if (keyDownIndex[GLFW_KEY_3])
-		{
-			uniformStructure.mode = 3;
-			uniformStructure.frameCount = 0;
-		}
-		if (keyDownIndex[GLFW_KEY_4])
-		{
-			uniformStructure.mode = 4;
-			uniformStructure.frameCount = 0;
-		}
-		if (keyDownIndex[GLFW_KEY_5])
-		{
-			uniformStructure.mode = 5;
-			uniformStructure.frameCount = 0;
-		}
-		if (keyDownIndex[GLFW_KEY_6])
-		{
-			uniformStructure.mode = 6;
-			uniformStructure.frameCount = 0;
-		}
-		if (keyDownIndex[GLFW_KEY_7])
-		{
-			uniformStructure.mode = 7;
-			uniformStructure.frameCount = 0;
-		}
-		if (keyDownIndex[GLFW_KEY_8])
-		{
-			uniformStructure.mode = 8;
-			uniformStructure.frameCount = 0;
-		}
-		if (keyDownIndex[GLFW_KEY_9])
-		{
-			uniformStructure.mode = 9;
 			uniformStructure.frameCount = 0;
 		}
 		if (keyDownIndex[GLFW_KEY_MINUS])

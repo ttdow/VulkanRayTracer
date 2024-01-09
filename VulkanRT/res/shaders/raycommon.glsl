@@ -29,6 +29,8 @@ struct Reservoir
 	float wsum; // The sum of the weights.
 	float m;	// The number of samples seens so far.
 	float w;	// Probablistic weight.
+
+	vec3 pos; // Position on area light source.
 };
 
 float rand(vec2 st)
@@ -73,16 +75,55 @@ void MergeReservoirs(inout Reservoir r1, float pHat1, Reservoir r2, float pHat2,
 }
 
 // Combine two reservoirs into 1 new reservoir.
-Reservoir CombineReservoir(Reservoir r1, float pHat1, Reservoir r2, float pHat2, vec2 seed)
-{
-	Reservoir newReservoir = { 0.0, 0.0, 0.0, 0.0} ;
+//Reservoir CombineReservoir(Reservoir r1, float pHat1, Reservoir r2, float pHat2, vec2 seed)
+//{
+//	Reservoir newReservoir = { 0.0, 0.0, 0.0, 0.0};
+//
+//	// Add the 2 old reservoirs to the new reservoir.
+//	UpdateReservoir(newReservoir, r1.y, pHat1 * r1.w * r1.m, rand(seed + r2.w + 7.11));
+//	UpdateReservoir(newReservoir, r2.y, pHat2 * r2.w * r2.m, rand(seed + r1.w + 11.7));
+//
+//	// Sum the number of samples seen.
+//	newReservoir.m = r1.m + r2.m;
+//
+//	return newReservoir;
+//}
 
-	// Add the 2 old reservoirs to the new reservoir.
-	UpdateReservoir(newReservoir, r1.y, pHat1 * r1.w * r1.m, rand(seed + r2.w + 7.11));
-	UpdateReservoir(newReservoir, r2.y, pHat2 * r2.w * r2.m, rand(seed + r1.w + 11.7));
+//vec3 UniformSampleHemisphere(vec2 uv) 
+//{
+//    float z = uv.x;
+//    float r = sqrt(max(0, 1.0 - z * z));
+//    float phi = 2.0 * M_PI * uv.y;
+//
+//    return vec3(r * cos(phi), z, r * sin(phi));
+//}
+//
+//vec3 AlignHemisphereWithCoordinateSystem(vec3 hemisphere, vec3 up) 
+//{
+//    vec3 right = normalize(cross(up, vec3(0.0072f, 1.0f, 0.0034f)));
+//    vec3 forward = cross(right, up);
+//
+//    return hemisphere.x * right + hemisphere.y * up + hemisphere.z * forward;
+//}
+//
+//void DiffuseReflection(vec3 hitPosition, vec3 N, vec2 seed)
+//{
+//    // Bounce the ray in a random direction using an axis-aligned hemisphere.
+//    vec3 hemisphere = UniformSampleHemisphere(vec2(rand(seed), rand(seed + 1)));
+//    vec3 alignedHemisphere = AlignHemisphereWithCoordinateSystem(hemisphere, N);
+//
+//    // Update the ray origin and direction for the next path.
+//    payload.rayOrigin = hitPosition;
+//    payload.rayDirection = alignedHemisphere;
+//
+//    return;
+//}
 
-	// Sum the number of samples seen.
-	newReservoir.m = r1.m + r2.m;
-
-	return newReservoir;
-}
+//void SpecularReflection(vec3 hitPosition, vec3 N)
+//{
+//    // Update the ray origin and direction for the next path.
+//    payload.rayOrigin = hitPosition;
+//    payload.rayDirection = reflect(payload.rayDirection, N);
+//
+//    return;
+//}
